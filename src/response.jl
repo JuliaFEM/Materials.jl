@@ -5,9 +5,10 @@ using Tensors
 generate_elastic_tensor{P<:Elastic}(mat::P, dim) = generate_elastic_tensor(mat, dim, nothing)
 
 """
-    Calculate elastic tensor for 2D, plane stress formulation
+    generate_elastic_tensor_2D(E, nu, ::Type{Val{:plane_stress}})
 
 Calculate elastic moduli in plain stress formulation
+
 """
 function generate_elastic_tensor_2D(E, nu, ::Type{Val{:plane_stress}})
     D = E/(1.0 - nu^2) .* [
@@ -18,7 +19,7 @@ function generate_elastic_tensor_2D(E, nu, ::Type{Val{:plane_stress}})
 end
 
 """
-    Calculate elastic tensor for 2D, plane strain formulation
+    generate_elastic_tensor_2D(E, nu, ::Type{Val{:plane_strain}})
 
 Calculate elastic moduli in plane stress formulation
 """
@@ -31,7 +32,7 @@ function generate_elastic_tensor_2D(E, nu, ::Type{Val{:plane_strain}})
 end
 
 """
-    Calculate elastic tensor for 3D
+    generate_elastic_tensor_3D(E, nu)
 
 Calculate 4th order elastic moduli
 ref: https://en.wikipedia.org/wiki/Lam%C3%A9_parameters
@@ -55,7 +56,7 @@ function generate_elastic_tensor_3D(E, nu)
 end
 
 """
-    Generate elastic tensor
+    generate_elastic_tensor{P<:Elastic}(mat::P, dim, formulation)
 
 Calculate elastic moduli
 """
@@ -74,7 +75,7 @@ function generate_elastic_tensor{P<:Elastic}(mat::P, dim, formulation)
 end
 
 """
-    Calculate strain
+    generate_strain(gradu, dim, finite_strain::Bool)
 
 Calculate string using gradu
 """
@@ -88,7 +89,7 @@ function generate_strain(gradu, dim, finite_strain::Bool)
 end
 
 """
-    Calculate deformation gradient
+    generate_deformation_gradient(gradu, dim, finite_strain::Bool)
 
 Calculate deformation gradient
 """
@@ -102,7 +103,7 @@ function generate_deformation_gradient(gradu, dim, finite_strain::Bool)
 end
 
 """
-    Calculate stress in 2D
+    calculate_2D(mat::Material, gradu)
 
 Calculate stress either in plane stress or plain strain formulation
 """
@@ -118,7 +119,7 @@ function calculate_2D(mat::Material, gradu)
 end
 
 """
-    Calculate stress in 3D
+    calculate_3D(mat::Material, gradu)
 
 Calculate stress either in plane stress or plain strain formulation
 """
@@ -132,7 +133,7 @@ function calculate_3D(mat::Material, gradu)
 end
 
 """
-    Calculate stress response
+    calc_response(mat::Material, gradu)
 
 Calculate corresponding stress for a given strain
 """
