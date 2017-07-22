@@ -1,14 +1,6 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
 
-#type Elasticity <: FieldProblem
-#    # these are found from problem.properties for type Problem{Elasticity}
-#    formulation :: Symbol
-#    finite_strain :: Bool
-#    geometric_stiffness :: Bool
-#    store_fields :: Vector{Symbol}
-#end
-
 abstract type AbstractMaterial end
 
 abstract type Elastic<:AbstractMaterial end
