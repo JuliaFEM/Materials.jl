@@ -9,6 +9,11 @@ DocTestSetup = quote
 end
 ```
 
+## Types
+```@autodocs
+Modules = [Materials]
+```
+
 ## Functions
 
 
