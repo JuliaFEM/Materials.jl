@@ -2,72 +2,6 @@
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
 using Tensors
 
-
-"""
-    Calculate stress response
-
-Calculate corresponding stress for a given strain
-"""
-function calc_response(mat::Material, gradu, t)
-    dim = mat.dimension
-    if dim == 1
-        error("Not implemented yet")
-    elseif dim == 2
-        return calculate_2D(mat::Material, gradu, t)
-    elseif dim == 3
-        return calculate_3D(mat::Material, gradu, t)
-    end
-end
-
-"""
-    Calculate stress in 2D
-
-Calculate stress either in plane stress or plain strain formulation
-"""
-function calculate_2D(mat::Material, gradu, t)
-    formulation = mat.formulation
-    finite_strain = mat.finite_strain
-    elastic_properties = mat.properties["elastic"]    
-    D = generate_elastic_tensor(elastic_properties, 2, Val{formulation})
-    F = generate_deformation_gradient(gradu, 2, finite_strain)
-    strain = generate_strain(gradu, 2, finite_strain)
-    strain_vec = Tensor{1, 3}([strain[1,1], strain[2,2], strain[1,2]])
-    dot(D, strain_vec)
-end
-
-"""
-    Calculate stress in 3D
-
-Calculate stress either in plane stress or plain strain formulation
-"""
-function calculate_3D(mat::Material, gradu, t)
-    finite_strain = mat.finite_strain
-    elastic_properties = mat.properties["elastic"]
-    D = generate_elastic_tensor(elastic_properties, 3)
-    F = generate_deformation_gradient(gradu, 3, finite_strain)
-    strain = generate_strain(gradu, 3, finite_strain)
-    dcontract(D, strain)
-end
-
-"""
-    Generate elastic tensor
-
-Calculate elastic moduli
-"""
-function generate_elastic_tensor{P<:Elastic}(mat::P, dim, formulation)
-    E = mat.youngs_modulus
-    nu = mat.nu
-    if dim == 1
-        return E
-    elseif dim == 2
-        return generate_elastic_tensor_2D(E, nu, formulation)
-    elseif dim == 3
-        return generate_elastic_tensor_3D(E, nu)
-    else
-        error("Did not understand dimension. Given dimension $dim.")
-    end
-end
-
 generate_elastic_tensor{P<:Elastic}(mat::P, dim) = generate_elastic_tensor(mat, dim, nothing)
 
 """
@@ -112,12 +46,31 @@ function generate_elastic_tensor_3D(E, nu)
     my = E / (2*(1 + nu))
 
     # Identity tensor
-    I = one(Tensor{2, 3})
+    ident_tensor = one(Tensor{2, 3})
     f = (i,j,k,l) -> 1/2 * (kron_delta(i,k)*kron_delta(j,l) + kron_delta(i,l)*kron_delta(j,k))
     II = Tensor{4, 3, Float64}(f)
 
     # Elastic moduli
-    lambda * otimes(I, I) + 2*my*II
+    lambda * otimes(ident_tensor, ident_tensor) + 2*my*II
+end
+
+"""
+    Generate elastic tensor
+
+Calculate elastic moduli
+"""
+function generate_elastic_tensor{P<:Elastic}(mat::P, dim, formulation)
+    E = mat.youngs_modulus
+    nu = mat.nu
+    if dim == 1
+        return E
+    elseif dim == 2
+        return generate_elastic_tensor_2D(E, nu, Val{formulation})
+    elseif dim == 3
+        return generate_elastic_tensor_3D(E, nu)
+    else
+        error("Did not understand dimension. Given dimension $dim.")
+    end
 end
 
 """
@@ -146,4 +99,51 @@ function generate_deformation_gradient(gradu, dim, finite_strain::Bool)
         F = eye(dim)
     end
     Tensor{2, dim}(F)
+end
+
+"""
+    Calculate stress in 2D
+
+Calculate stress either in plane stress or plain strain formulation
+"""
+function calculate_2D(mat::Material, gradu)
+    formulation = mat.formulation
+    finite_strain = mat.finite_strain
+    elastic_properties = mat.properties["elastic"]    
+    D = generate_elastic_tensor(elastic_properties, 2, formulation)
+    F = generate_deformation_gradient(gradu, 2, finite_strain)
+    strain = generate_strain(gradu, 2, finite_strain)
+    strain_vec = Tensor{1, 3}([strain[1,1], strain[2,2], strain[1,2]])
+    dot(D, strain_vec)
+end
+
+"""
+    Calculate stress in 3D
+
+Calculate stress either in plane stress or plain strain formulation
+"""
+function calculate_3D(mat::Material, gradu)
+    finite_strain = mat.finite_strain
+    elastic_properties = mat.properties["elastic"]
+    D = generate_elastic_tensor(elastic_properties, 3)
+    F = generate_deformation_gradient(gradu, 3, finite_strain)
+    strain = generate_strain(gradu, 3, finite_strain)
+    dcontract(D, strain)
+end
+
+"""
+    Calculate stress response
+
+Calculate corresponding stress for a given strain
+"""
+function calc_response(mat::Material, gradu)
+    dim = mat.dimension
+    if dim == 1
+        error("Not implemented yet")
+    elseif dim == 2
+        stress = calculate_2D(mat, gradu)
+    elseif dim == 3
+        stress = calculate_3D(mat, gradu)
+    end
+    stress
 end

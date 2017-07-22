@@ -19,8 +19,8 @@ using Tensors
     mat = Material(2, formulation=:plane_stress)
     elastic = IsotropicHooke(200e3, 0.3)
     add_property!(mat, elastic, "elastic")
-    t = 1.0
-    stress_tensor = calc_response(mat, gradu, t)
+
+    stress_tensor = calc_response(mat, gradu)
     @test expected_stress_tensor == stress_tensor
 end  
 
@@ -43,8 +43,7 @@ end
     elastic = IsotropicHooke(200e3, 0.3)
     add_property!(mat, elastic, "elastic")
 
-    t = 1.0
-    stress_tensor = calc_response(mat, gradu, t)
+    stress_tensor = calc_response(mat, gradu)
     @test expected_stress_tensor == stress_tensor
 end 
 
@@ -75,7 +74,6 @@ end
     elastic = IsotropicHooke(E, nu)
     add_property!(mat, elastic, "elastic")
     
-    t = 1.0
-    stress_tensor = calc_response(mat, gradu, t)
+    stress_tensor = calc_response(mat, gradu)
     @test expected_stress_tensor == stress_tensor
 end
