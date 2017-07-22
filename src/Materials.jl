@@ -3,6 +3,9 @@
 
 module Materials
 
-println("Loaded")
+include("types.jl")
+export Material, IsotropicHooke, Plastic, HyperElastic, add_property!
 
+include("response.jl")
+export calc_response!
 end
