@@ -4,29 +4,37 @@
 abstract type AbstractMaterial end
 
 abstract type Elastic<:AbstractMaterial end
+abstract type Plastic<:AbstractMaterial end
+abstract type HyperElastic<:AbstractMaterial end
 
 type IsotropicHooke<:Elastic
     youngs_modulus :: AbstractFloat
     nu :: AbstractFloat
 end
 
-abstract type Plastic<:AbstractMaterial end
-
-abstract type HyperElastic<:AbstractMaterial end
+type VonMises{F, T <: AbstractFloat}
+    yield_stress :: F
+    yield_function :: T
+end
 
 type Material{P<:AbstractMaterial}
     dimension :: Int
     formulation :: Symbol
     finite_strain :: Bool
-    time_steps :: Vector{AbstractFloat}
+    time :: Vector{AbstractFloat}
     properties :: Dict{AbstractString, P}
+    trial_values :: Dict{AbstractString, Any}
+    history_values :: Dict{AbstractString, Array{Any}}
 end
 
 Material(dim; formulation=:test, finite_strain=false) = Material(dim,
                                                                  formulation,
                                                                  finite_strain,
-                                                                 Vector{AbstractFloat}(),
-                                                                 Dict{AbstractString, AbstractMaterial}())
+                                                                 Vector{AbstractFloat}(0),
+                                                                 Dict{AbstractString, AbstractMaterial}(),
+                                                                 Dict{AbstractString, Any}(),
+                                                                 Dict{AbstractString, Array{Any}}()
+                                                                 )
 
 function add_property!(material::Material, mat_property, name, params...)
     material.properties[name] = mat_property(params...)
