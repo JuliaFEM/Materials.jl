@@ -12,9 +12,9 @@ type IsotropicHooke<:Elastic
     nu :: AbstractFloat
 end
 
-type VonMises<:Plastic
-    yield_stress :: AbstractFloat
-    yield_function :: Function
+type VonMises{F, T <: AbstractFloat}
+    yield_stress :: F
+    yield_function :: T
 end
 
 type Material{P<:AbstractMaterial}

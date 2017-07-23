@@ -2,8 +2,8 @@
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
 using Tensors
 
-kron_delta = (i, j) -> i == j ? 1 : 0
-ident_func = (i,j,k,l) -> 1/2 * (kron_delta(i,k)*kron_delta(j,l) + kron_delta(i,l)*kron_delta(j,k))
+kron_delta(i, j) = i == j ? 1 : 0
+ident_func(i,j,k,l) = 1/2 * (kron_delta(i,k)*kron_delta(j,l) + kron_delta(i,l)*kron_delta(j,k))
 
 """
     generate_elastic_tensor_3D(E, nu)
@@ -28,7 +28,8 @@ end
     generate_elastic_tensor_plane_stress(E, nu) 
 
 Calculate 4th order elastic moduli for plane stress
-formulation
+formulation. 
+ref: https://ocw.mit.edu/courses/mechanical-engineering/2-080j-structural-mechanics-fall-2013/course-notes/MIT2_080JF13_Lecture4.pdf
 """
 function generate_elastic_tensor_plane_stress(E, nu)
 
@@ -50,9 +51,8 @@ function generate_elastic_tensor_plane_stress(E, nu)
     lambda = (E * nu) / (1 - nu^2)
 
     # Identity tensor, but do not include sigma_zz element
-    it = eye(3,3)
-    it[3,3] = 0
-    ident_tensor = Tensor{2, 3}(it)
+    e3 = basevec(Vec{3}, 3)
+    ident_tensor = one(Tensor{2,3}) - otimes(e3, e3)
 
     # Remove all sigma_xz, sigma_yz and sigma_zz elements
     g = (i,j,k,l) -> case(k, l) ? 0.0 : ident_func(i,j,k,l)
