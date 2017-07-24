@@ -4,8 +4,15 @@
 module Materials
 
 include("types.jl")
-export Material, IsotropicHooke, Plastic, HyperElastic, add_property!
+export Material, IsotropicHooke, Plastic, VonMises, Model, create_material
+
+include("plasticity.jl")
+export yield_function, d_yield_function, equivalent_stress
+
+include("solvers.jl")
+export find_root, radial_return, array_to_tensor, tensor_to_array
 
 include("response.jl")
-export calc_response
+export calc_response!
+
 end

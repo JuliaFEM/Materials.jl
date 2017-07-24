@@ -1,7 +1,8 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
-
+using Materials
 using Tensors
+using Base.Test
 
 # See Hooke's law definitions from: https://en.wikipedia.org/wiki/Hooke's_law
 
@@ -30,11 +31,11 @@ using Tensors
     expected_stress_tensor = Tensor{2, 3}(expected)
 
     # Calculation
-    mat = Material(2, formulation=:plane_stress)
     elastic = IsotropicHooke(200e3, 0.3)
-    add_property!(mat, elastic, "elastic")
-
-    stress_tensor = calc_response(mat, gradu)
+    model = Model(elastic)
+    mat = create_material(2, model, formulation=:plane_stress)
+    calc_response!(mat, gradu)
+    stress_tensor = mat.trial_values["stress"]
     @test isapprox(expected_stress_tensor, stress_tensor)
 end
 
@@ -45,7 +46,7 @@ end
 
     # nabla u = dx/dX
     gradu = [0.125 0.125;
-             0.0   0.0]
+    0.0   0.0]
 
     # Small strains
     strain = 1/2*(gradu + gradu')
@@ -61,13 +62,13 @@ end
                 sigma_xy  sigma_y       0;
                        0        0 sigma_z]
     expected_stress_tensor = Tensor{2, 3}(expected)
-
-    # Calculation
-    mat = Material(2, formulation=:plane_strain)
     elastic = IsotropicHooke(200e3, 0.3)
-    add_property!(mat, elastic, "elastic")
+    model = Model(elastic)
+    # Calculation
+    mat = create_material(2, model, formulation=:plane_strain)
 
-    stress_tensor = calc_response(mat, gradu)
+    calc_response!(mat, gradu)
+    stress_tensor = mat.trial_values["stress"]
     @test isapprox(expected_stress_tensor, stress_tensor)
 end
 
@@ -98,12 +99,12 @@ end
     expected_stress_tensor = Tensor{2, 3}([ stress_vec[1] stress_vec[4] stress_vec[6];
                                             stress_vec[4] stress_vec[2] stress_vec[5];
                                             stress_vec[6] stress_vec[5] stress_vec[3]])
-
+    elastic = IsotropicHooke(200e3, 0.3)
+    model = Model(elastic)
     # Calculation
-    mat = Material(3)
-    elastic = IsotropicHooke(E, nu)
-    add_property!(mat, elastic, "elastic")
-
-    stress_tensor = calc_response(mat, gradu)
+    mat = create_material(3, model)
+    
+    calc_response!(mat, gradu)
+    stress_tensor = mat.trial_values["stress"]
     @test expected_stress_tensor == stress_tensor
 end

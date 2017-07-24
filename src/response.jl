@@ -2,16 +2,16 @@
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
 using Tensors
 
-kron_delta(i, j) = i == j ? 1 : 0
+kron_delta(i::Integer, j::Integer) = i == j ? 1 : 0
 ident_func(i,j,k,l) = 1/2 * (kron_delta(i,k)*kron_delta(j,l) + kron_delta(i,l)*kron_delta(j,k))
 
 """
-    generate_elastic_tensor_3D(E, nu)
+    calc_elastic_tensor_3D(E, nu)
 
 Calculate 4th order elastic moduli
 ref: https://en.wikipedia.org/wiki/Hooke's_law
 """
-function generate_elastic_tensor(E, nu)
+function calc_elastic_tensor(E, nu)
     # Lame constants
     lambda = (E * nu) / ((1 + nu) * (1 - 2*nu))
     my = E / (2*(1 + nu))
@@ -25,13 +25,14 @@ function generate_elastic_tensor(E, nu)
 end
 
 """
-    generate_elastic_tensor_plane_stress(E, nu) 
+    calc_elastic_tensor_plane_stress(E, nu)
 
 Calculate 4th order elastic moduli for plane stress
-formulation. 
-ref: https://ocw.mit.edu/courses/mechanical-engineering/2-080j-structural-mechanics-fall-2013/course-notes/MIT2_080JF13_Lecture4.pdf
+formulation.
+ref: https://ocw.mit.edu/courses/mechanical-engineering/2-080j-structural-
+mechanics-fall-2013/course-notes/MIT2_080JF13_Lecture4.pdf
 """
-function generate_elastic_tensor_plane_stress(E, nu)
+function calc_elastic_tensor_plane_stress(E, nu)
 
     """
         Remove all the sigma_xz, sigma_yz and sigma_zz elements
@@ -63,9 +64,17 @@ function generate_elastic_tensor_plane_stress(E, nu)
 
 end
 
-generate_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:plane_stress}}) = generate_elastic_tensor_plane_stress(mat.youngs_modulus, mat.nu)
-generate_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:plane_strain}}) = generate_elastic_tensor(mat.youngs_modulus, mat.nu)
-generate_elastic_tensor(mat::IsotropicHooke) = generate_elastic_tensor(mat.youngs_modulus, mat.nu)
+function calc_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:plane_stress}})
+    calc_elastic_tensor_plane_stress(mat.youngs_modulus, mat.nu)
+end
+
+function calc_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:plane_strain}})
+    calc_elastic_tensor(mat.youngs_modulus, mat.nu)
+end
+
+function calc_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:basic}})
+    calc_elastic_tensor(mat.youngs_modulus, mat.nu)
+end
 
 """
     generate_strain(gradu, dim, finite_strain::Bool)
@@ -76,7 +85,7 @@ function generate_strain(gradu, dim, finite_strain::Bool)
     if finite_strain
         strain = 1/2*(gradu + gradu' + gradu'*gradu)
     else
-        strain = 1/2*(gradu + gradu')
+       strain = 1/2*(gradu + gradu')
     end
     if dim == 2
         strain_mat = zeros(3,3)
@@ -101,29 +110,64 @@ function generate_deformation_gradient(gradu, dim, finite_strain::Bool)
     Tensor{2, dim}(F)
 end
 
+function plastic_response(plastic_model::VonMises, stress_trial, stress_last, dstrain, D)
+    if yield_function(stress_trial, plastic_model) > 0
+
+        yield(stress) = yield_function(stress, plastic_model)
+        dyield(stress) = d_yield_function(stress, plastic_model)
+        params = Dict{AbstractString, Any}()
+        params["yield_function"] = yield
+        params["init_stress"] = stress_last
+        params["dstrain"] = dstrain
+        params["d_yield_function"] = dyield
+        params["D"] = D
+        x = rand(7)
+        x[end] = 0.0
+
+        f(stress_) = radial_return(stress_, params)
+        df(stress_) = ForwardDiff.jacobian(f, stress_)
+        root = find_root(f, df, x; max_iter=50, norm_acc=1e-9)
+
+        dstress = array_to_tensor(root)
+        stress_trial = stress_last + dstress
+    end
+    stress_trial
+end
+
+"""Calculate stress response for given material model
+"""
+function calculate_stress!(mat::Material, model, gradu, dim, finite_strain, formulation)
+    D = calc_elastic_tensor(model.elastic, Val{formulation})
+    dstrain = generate_strain(gradu, dim, finite_strain)
+    dstress = dcontract(D, dstrain)
+
+    stress_last = mat.history_values["stress"][end]
+    strain_last = mat.history_values["strain"][end]
+
+    stress_trial = stress_last + dstress
+    strain = strain_last + dstrain
+    F = generate_deformation_gradient(gradu, dim, finite_strain)
+
+    plastic_model = model.plastic
+    if typeof(plastic_model) == NoPlasticity
+        stress = stress_trial
+    else
+        stress = plastic_response(plastic_model, stress_trial, stress_last, dstrain, D)
+    end
+    mat.trial_values["stress"] = stress
+    mat.trial_values["strain"] = strain
+    mat.trial_values["F"] = F
+end
+
 """
     calc_response(mat::Material, gradu)
 
 Calculate corresponding stress for a given strain
 """
-function calc_response(mat::Material, gradu)
+function calc_response!(mat::Material, gradu)
     dim = mat.dimension
-    elastic = mat.properties["elastic"]
+    model = mat.model
     finite_strain = mat.finite_strain
-
-    if dim == 1
-        error("Not implemented yet")
-
-    elseif dim == 2
-        D = generate_elastic_tensor(elastic, Val{mat.formulation})
-        strain = generate_strain(gradu, 2, finite_strain)
-        F = generate_deformation_gradient(gradu, 2, finite_strain)
-
-    elseif dim == 3
-        D = generate_elastic_tensor(elastic)
-        strain = generate_strain(gradu, 3, finite_strain)
-        F = generate_deformation_gradient(gradu, 3, finite_strain)
-        
-    end
-    stress = dcontract(D, strain)
+    formulation = mat.formulation
+    calculate_stress!(mat, model, gradu, dim, finite_strain, formulation)
 end
