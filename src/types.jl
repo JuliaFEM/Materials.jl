@@ -5,43 +5,49 @@ abstract type AbstractMaterial end
 
 abstract type Elastic<:AbstractMaterial end
 abstract type Plastic<:AbstractMaterial end
-abstract type HyperElastic<:AbstractMaterial end
 
-type IsotropicHooke<:Elastic
+# Elastic models
+struct IsotropicHooke<:Elastic
     youngs_modulus :: AbstractFloat
     nu :: AbstractFloat
 end
 
-type VonMises{F, T <: AbstractFloat}
+# Plastic models
+type NoPlasticity <: Plastic end
+
+struct VonMises{F <: AbstractFloat} <: Plastic
     yield_stress :: F
-    yield_function :: T
 end
 
-type Material{P<:AbstractMaterial}
+struct Model
+    elastic :: Elastic
+    plastic :: Plastic
+end
+
+Model(x::Elastic) = Model(x, NoPlasticity())
+
+struct Material
     dimension :: Int
-    formulation :: Symbol
     finite_strain :: Bool
-    time :: Vector{AbstractFloat}
-    properties :: Dict{AbstractString, P}
-    trial_values :: Dict{AbstractString, Any}
+    formulation :: Symbol
     history_values :: Dict{AbstractString, Array{Any}}
+    model :: Model
+    time :: Vector{AbstractFloat}
+    trial_values :: Dict{AbstractString, Any}
 end
 
-Material(dim; formulation=:test, finite_strain=false) = Material(dim,
-                                                                 formulation,
-                                                                 finite_strain,
-                                                                 Vector{AbstractFloat}(0),
-                                                                 Dict{AbstractString, AbstractMaterial}(),
-                                                                 Dict{AbstractString, Any}(),
-                                                                 Dict{AbstractString, Array{Any}}()
-                                                                 )
-
-function add_property!(material::Material, mat_property, name, params...)
-    material.properties[name] = mat_property(params...)
+function create_material(dim, model; formulation=:basic, finite_strain=false)
+    time_array = Vector{AbstractFloat}(0)
+    trial_values = Dict{AbstractString, Any}()
+    history_values = Dict{AbstractString, Array{Any}}()
+    history_values["stress"] = [Tensor{2,3}(zeros(3,3))]
+    history_values["strain"] = [Tensor{2,3}(zeros(3,3))]
+    Material(dim,
+             finite_strain,
+             formulation,
+             history_values,
+             model,
+             time_array,
+             trial_values,
+             )
 end
-
-function add_property!{P<:AbstractMaterial}(material::Material, mat_property::P, name)
-    material.properties[name] = mat_property
-end
-
-mat = Material(1)
