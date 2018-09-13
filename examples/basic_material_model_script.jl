@@ -1,12 +1,13 @@
+using LinearAlgebra
 using Einsum
-using Base.Test
+using Test
 
 # Tensors
-I = eye(3) # Second order identity tensor
+I_ = Matrix(1.0I,3,3) # Second order identity tensor
 II = zeros(3,3,3,3)
-@einsum II[i,j,k,l] = I[i,k]*I[j,l] # Fourth order symmetric identity tensor
+@einsum II[i,j,k,l] = I_[i,k]*I_[j,l] # Fourth order symmetric identity tensor
 IxI = zeros(3,3,3,3)
-@einsum IxI[i,j,k,l] = I[i,j]*I[k,l] # "Trace" tensor
+@einsum IxI[i,j,k,l] = I_[i,j]*I_[k,l] # "Trace" tensor
 P = II - 1/3*IxI # Deviatoric projection tensor
 
 # Functions
@@ -24,7 +25,7 @@ A = rand(3,3) # Create Random second order tensor
 A += A' # Symmetrize it
 
 @test isapprox(double_contraction(II, A), A)
-@test isapprox(double_contraction(IxI, A), eye(3)*trace(A))
+@test isapprox(double_contraction(IxI, A), I_*tr(A))
 
 function deviator(x::AbstractArray{<:Number,2})
     s = zeros(3,3)
@@ -80,3 +81,71 @@ R = R0
 X_1 = zeros(3,3)
 X_2 = zeros(3,3)
 varepsilon_pl = zeros(3,3)
+varepsilon_el = zeros(3,3)
+t = 0.0
+
+# Determine loading sequence
+varepsilon_a = 0.01 # Strain amplitude
+varepsilon_tot(t) = sin(t)*[varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
+dt = 0.05 # Time step
+T = pi/2 # Time span
+
+# Initialize result storage
+ts = [t]
+sigmas = [sigma]
+Rs = [R]
+X_1s = [X_1]
+X_2s = [X_2]
+varepsilon_pls = [varepsilon_pl]
+varepsilon_els = [varepsilon_el]
+
+# Time integration
+while t < T
+    # Store initial state
+    sigma_n = sigma
+    R_n = R
+    X_1n = X_1
+    X_2n = X_2
+    varepsilon_pln = varepsilon_pl
+    varepsilon_eln = varepsilon_el
+    t_n = t
+
+    # Increments
+    t = t + dt
+    dvarepsilon_tot = varepsilon_tot(t) - varepsilon_tot(t_n)
+    # Elastic trial
+    sigma_tr = sigma_n + double_contraction(C, dvarepsilon_tot)
+    # Check for yield
+    f_tr = von_mises_stress(sigma_tr - X_1 - X_2) - R
+    if f_tr <= 0 # Elastic step
+        # Update variables
+        sigma = sigma_tr
+        varepsilon_el += dvarepsilon_tot
+    else # Viscoplastic step
+        function g(x) # System of non-linear equations
+            sigma = reshape(x[1:9], 3,3)
+            X_1 = reshape(x[10:18], 3,3)
+            X_2 = reshape(x[19:27], 3,3)
+            R = x[28]
+            dotp = ((von_mises_stress(sigma - X_1 - X_2) - R)/K_n)^n_n
+            dp = dotp*dt
+            s = deviator(sigma - X_1 - X_2)
+            n = 3/2*s/von_mises_stress(sigma - X_1 - X_2)
+            dvarepsilon_pl = dp*n
+            f1 = sigma_n - sigma + double_contraction(C, dvarepsilon_tot - dvarepsilon_pl)
+            R = Rn + b*(Q-Rn)*dp
+            X_1 = X_1n + 2/3*C_1*dp*(n - 3*D_1/(2*C_1)*X_1)
+            X_2 = X_2n + 2/3*C_2*dp*(n - 3*D_2/(2*C_2)*X_2)
+
+        end
+    end
+
+    # Store variables
+    push!(ts, t)
+    push!(sigmas, sigma)
+    push!(Rs, R)
+    push!(X_1s, X_1)
+    push!(X_2s, X_2)
+    push!(varepsilon_pls, varepsilon_pl)
+    push!(varepsilon_els, varepsilon_el)
+end
