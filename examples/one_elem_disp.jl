@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using FEMBase, LinearAlgebra
+using JuliaFEM, FEMBase, LinearAlgebra
 
 mutable struct Continuum3D <: FieldProblem
     material_model :: Symbol
@@ -61,7 +61,13 @@ function FEMBase.assemble_elements!(problem::Problem{Continuum3D},
 
             # Calculate stress response
             calculate_stress!(material, element, ip, time, dtime, D, S)
+            gradu = element("displacement", ip, time, Val{:Grad})
+            strain = 0.5*(gradu + gradu')
+            strain_vector = [strain[1,1], strain[2,2], strain[3,3], strain[1,2], strain[2,3], strain[3,1]]
             update!(ip, "stress", time => S)
+            update!(ip, "strain", time => strain_vector)
+
+            @info("material matrix", D)
 
             # Material stiffness matrix
             Km += w*BL'*D*BL
@@ -142,27 +148,28 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
     stress_v = sqrt(3/2*sum(stress_dev .* stress_dev))
     @info("stuff", stress_v, material.yield_stress)
 
+    fill!(material_matrix, 0.0)
+    material_matrix[1,1] = 2.0*mu + lambda
+    material_matrix[2,2] = 2.0*mu + lambda
+    material_matrix[3,3] = 2.0*mu + lambda
+    material_matrix[4,4] = mu
+    material_matrix[5,5] = mu
+    material_matrix[6,6] = mu
+    material_matrix[1,2] = lambda
+    material_matrix[2,1] = lambda
+    material_matrix[2,3] = lambda
+    material_matrix[3,2] = lambda
+    material_matrix[1,3] = lambda
+    material_matrix[3,1] = lambda
+
     if stress_v < material.yield_stress
-        @info("Elastic strain")
-        fill!(material_matrix, 0.0)
-        material_matrix[1,1] = 2.0*mu + lambda
-        material_matrix[2,2] = 2.0*mu + lambda
-        material_matrix[3,3] = 2.0*mu + lambda
-        material_matrix[4,4] = mu
-        material_matrix[5,5] = mu
-        material_matrix[6,6] = mu
-        material_matrix[1,2] = lambda
-        material_matrix[2,1] = lambda
-        material_matrix[2,3] = lambda
-        material_matrix[3,2] = lambda
-        material_matrix[1,3] = lambda
-        material_matrix[3,1] = lambda
         stress_vector[1] = stress_trial[1,1]
         stress_vector[2] = stress_trial[2,2]
         stress_vector[3] = stress_trial[3,3]
         stress_vector[4] = stress_trial[1,2]
         stress_vector[5] = stress_trial[2,3]
         stress_vector[6] = stress_trial[3,1]
+        return nothing
     else
         @info("Plastic strain")
         n = 3.0/2.0*stress_dev/stress_v
@@ -170,7 +177,6 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
         dstrain_pl = dla*n
         material.plastic_strain += dstrain_pl
         material.plastic_multiplier += dla
-        fill!(material_matrix, 0.0)
         dstrain_el = dstrain - dstrain_pl
         dstress = lambda*tr(dstrain_el)*I + 2.0*mu*dstrain_el
         stress = stress0 + dstress
@@ -180,6 +186,10 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
         stress_vector[4] = stress[1,2]
         stress_vector[5] = stress[2,3]
         stress_vector[6] = stress[3,1]
+        D = material_matrix
+        dg = df = [n[1,1], n[2,2], n[3,3], n[1,2], n[2,3], n[3,1]]
+        material_matrix[:,:] .= D - (D*dg*df'*D) / (df'*D*dg)
+        @info("n", n)
     end
 
     return nothing
@@ -196,59 +206,104 @@ X = Dict(
     7 => [1.0, 1.0, 1.0],
     8 => [0.0, 1.0, 1.0])
 
-u0 = Dict(j => zeros(3) for j in 1:8)
-u1 = copy(u0)
-u1[7] = [1.0, 0.0, 0.0]
+body_element = Element(Hex8, (1, 2, 3, 4, 5, 6, 7, 8))
+body_elements = [body_element]
+update!(body_elements, "geometry", X)
+update!(body_elements, "youngs modulus", 200.0e3)
+update!(body_elements, "poissons ratio", 0.3)
+update!(body_elements, "yield stress", 100.0)
+update!(body_elements, "plastic strain", 0.0 => zeros(3,3))
 
-element = Element(Hex8, (1, 2, 3, 4, 5, 6, 7, 8))
-update!(element, "geometry", X)
-update!(element, "displacement", 0.0 => u0)
-update!(element, "displacement", 1.0 => u1)
-update!(element, "youngs modulus", 100.0)
-update!(element, "poissons ratio", 0.3)
-update!(element, "yield stress", 50.0)
-update!(element, "plastic strain", 0.0 => zeros(3,3))
+bc_element_1 = Element(Poi1, (1,))
+bc_element_2 = Element(Poi1, (2,))
+bc_element_3 = Element(Poi1, (3,))
+bc_element_4 = Element(Poi1, (4,))
+bc_element_5 = Element(Poi1, (5,))
+bc_element_6 = Element(Poi1, (6,))
+bc_element_7 = Element(Poi1, (7,))
+bc_element_8 = Element(Poi1, (8,))
+
+bc_elements = [bc_element_1, bc_element_2, bc_element_3, bc_element_4,
+               bc_element_5, bc_element_6, bc_element_7, bc_element_8]
+update!(bc_elements, "geometry", X)
+for element in (bc_element_1, bc_element_2, bc_element_3, bc_element_4)
+    update!(element, "displacement 3", 0.0)
+end
+for element in (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
+    update!(element, "displacement 3", 0.0 => 0.0)
+    update!(element, "displacement 3", 1.0 => 1.0e-3)
+end
+
+update!(bc_element_1, "displacement 1", 0.0)
+update!(bc_element_1, "displacement 2", 0.0)
+update!(bc_element_2, "displacement 2", 0.0)
+update!(bc_element_4, "displacement 1", 0.0)
+
+update!(bc_element_5, "displacement 1", 0.0)
+update!(bc_element_5, "displacement 2", 0.0)
+update!(bc_element_6, "displacement 2", 0.0)
+update!(bc_element_8, "displacement 1", 0.0)
+
+#update!(bc_element_5, "displacement 1", 0.0)
+#update!(bc_element_5, "displacement 2", 0.0)
+#update!(bc_element_5, "displacement 3", 0.0 => 0.0)
+#update!(bc_element_5, "displacement 3", 1.0 => 1.0e-3)
 
 # Initialize material model to integration points
-for ip in get_integration_points(element)
-    ip.fields["material"] = field(IdealPlastic(element, ip, 0.0))
+for ip in get_integration_points(body_element)
+    ip.fields["material"] = field(IdealPlastic(body_element, ip, 0.0))
     update!(ip, "stress", 0.0 => zeros(6))
+    update!(ip, "strain", 0.0 => zeros(6))
 end
 
-function Base.run()
-    time = 0.0
-    time_end = 1.0
-    dtime = 0.1
-    material_matrix = zeros(6,6)
-    stress_vector = zeros(6)
-    while time < time_end
-        time += dtime
-        @info("time = $time")
-        for ip in get_integration_points(element)
-            material = ip("material", time)
-            calculate_stress!(material, element, ip, time, dtime,
-                              material_matrix, stress_vector)
-            update!(ip, "stress", time => stress_vector)
-        end
-    end
+body = Problem(Continuum3D, "1 element problem", 3)
+bc = Problem(Dirichlet, "fix displacement", 3, "displacement")
+add_elements!(body, body_elements)
+add_elements!(bc, bc_elements)
+analysis = Analysis(Nonlinear, "solve problem")
+xdmf = Xdmf("results4"; overwrite=true)
+add_results_writer!(analysis, xdmf)
+add_problems!(analysis, body, bc)
+time_end = 1.0
+dtime = 0.05
+
+for problem in get_problems(analysis)
+    initialize!(problem, analysis.properties.time)
 end
 
-run()
+while analysis.properties.time < time_end
+    analysis.properties.time += dtime
+    update!(body_element, "displacement", analysis.properties.time => Dict(j => zeros(3) for j in 1:8))
+    @info("time = $(analysis.properties.time)")
+    run!(analysis)
+end
+
+close(xdmf)
 
 using Plots
-ip1 = first(get_integration_points(element))
-t = range(0, stop=1.0, length=50)
-s11(t) = ip1("stress", t)[1]
-s22(t) = ip1("stress", t)[2]
-s33(t) = ip1("stress", t)[3]
-s12(t) = ip1("stress", t)[4]
-s23(t) = ip1("stress", t)[5]
-s31(t) = ip1("stress", t)[6]
-s(t) = ip1("stress", t)
-labels = ["s11" "s22" "s33" "s12" "s23" "s31"]
-plot(t, s11, title="stress at integration point 1", label="s11")
-plot!(t, s22, label="s22")
-plot!(t, s33, label="s33")
-plot!(t, s12, label="s12")
-plot!(t, s23, label="s23")
-plot!(t, s31, label="s31")
+if true
+    ip1 = first(get_integration_points(body_element))
+    t = range(0, stop=1.0, length=50)
+    s11(t) = ip1("stress", t)[1]
+    s22(t) = ip1("stress", t)[2]
+    s33(t) = ip1("stress", t)[3]
+    s12(t) = ip1("stress", t)[4]
+    s23(t) = ip1("stress", t)[5]
+    s31(t) = ip1("stress", t)[6]
+    e33(t) = ip1("strain", t)[3]
+    s(t) = ip1("stress", t)
+    function vmis(t)
+        s11, s22, s33, s12, s23, s31 = ip1("stress", t)
+        return sqrt(1/2*((s11-s22)^2 + (s22-s33)^2 + (s33-s11)^2 + 6*(s12^2+s23^2+s31^2)))
+    end
+    y = vmis.(t)
+    x = e33.(t)
+    plot(x, y)
+    # labels = ["s11" "s22" "s33" "s12" "s23" "s31"]
+    # plot(t, s11, title="stress at integration point 1", label="s11")
+    # plot!(t, s22, label="s22")
+    # plot!(t, s33, label="s33")
+    # plot!(t, s12, label="s12")
+    # plot!(t, s23, label="s23")
+    # plot!(t, s31, label="s31")
+end
