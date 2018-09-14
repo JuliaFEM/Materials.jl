@@ -1,6 +1,9 @@
 using LinearAlgebra
 using Einsum
 using Test
+using NLsolve
+using Plots
+plotly()
 
 # Tensors
 I_ = Matrix(1.0I,3,3) # Second order identity tensor
@@ -38,7 +41,6 @@ function von_mises_stress(stress::AbstractArray{<:Number,2})
     return sqrt(3/2*double_contraction(s,s))
 end
 
-
 S = [100 0 0; 0 0 0; 0 0 0]
 @test isapprox(von_mises_stress(S), 100)
 
@@ -73,7 +75,7 @@ D_2 = 1000.0 # Rate parameter 2
 # => n = \frac{\partial f}{\partial \sigma}
 # => \dot{\varepsilon}_{pl} = \dot{p} n
 K_n = 100.0 # Drag stress
-n_n = 10.0 # Viscosity exponent
+n_n = 3.0 # Viscosity exponent
 
 # Initialize variables
 sigma = zeros(3,3)
@@ -86,9 +88,19 @@ t = 0.0
 
 # Determine loading sequence
 varepsilon_a = 0.01 # Strain amplitude
-varepsilon_tot(t) = sin(t)*[varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
-dt = 0.05 # Time step
-T = pi/2 # Time span
+#varepsilon_tot(t) = sin(t)*[varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
+dt = 0.01 # Time step
+T0 = 1.0
+T = 10.0 # Time span
+# varepsilon_tot(t) = t/T*[varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
+function varepsilon_tot(t)
+    if t<T0
+        return t/T0*[varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
+    else
+        return [varepsilon_a 0 0; 0 -nu*varepsilon_a 0; 0 0 -nu*varepsilon_a]
+    end
+end
+
 
 # Initialize result storage
 ts = [t]
@@ -101,6 +113,8 @@ varepsilon_els = [varepsilon_el]
 
 # Time integration
 while t < T
+    global t, sigma, R, X_1, X_2, varepsilon_pl, varepsilon_el, ts, sigmas, Rs, X_1s, X2_s, varepsilon_pls, varepsilon_els
+    global C, K_n, n_n, C_1, D_1, C_2, D_2, Q, b
     # Store initial state
     sigma_n = sigma
     R_n = R
@@ -117,27 +131,45 @@ while t < T
     sigma_tr = sigma_n + double_contraction(C, dvarepsilon_tot)
     # Check for yield
     f_tr = von_mises_stress(sigma_tr - X_1 - X_2) - R
+    println("***************************************")
     if f_tr <= 0 # Elastic step
         # Update variables
+        println("Elastic step!")
         sigma = sigma_tr
         varepsilon_el += dvarepsilon_tot
     else # Viscoplastic step
-        function g(x) # System of non-linear equations
+        println("Viscoplastic step!")
+        function g!(F, x) # System of non-linear equations
             sigma = reshape(x[1:9], 3,3)
-            X_1 = reshape(x[10:18], 3,3)
-            X_2 = reshape(x[19:27], 3,3)
-            R = x[28]
+            R = x[10]
+            X_1 = reshape(x[11:19], 3,3)
+            X_2 = reshape(x[20:28], 3,3)
             dotp = ((von_mises_stress(sigma - X_1 - X_2) - R)/K_n)^n_n
             dp = dotp*dt
             s = deviator(sigma - X_1 - X_2)
             n = 3/2*s/von_mises_stress(sigma - X_1 - X_2)
             dvarepsilon_pl = dp*n
-            f1 = sigma_n - sigma + double_contraction(C, dvarepsilon_tot - dvarepsilon_pl)
-            R = Rn + b*(Q-Rn)*dp
-            X_1 = X_1n + 2/3*C_1*dp*(n - 3*D_1/(2*C_1)*X_1)
-            X_2 = X_2n + 2/3*C_2*dp*(n - 3*D_2/(2*C_2)*X_2)
-
+            f1 = vec(sigma_n - sigma + double_contraction(C, dvarepsilon_tot - dvarepsilon_pl))
+            f2 = R_n - R + b*(Q-R)*dp
+            f3 = vec(X_1n - X_1 + 2/3*C_1*dp*(n - 3*D_1/(2*C_1)*X_1))
+            f4 = vec(X_2n - X_2 + 2/3*C_2*dp*(n - 3*D_2/(2*C_2)*X_2))
+            F[:] = vec([f1; f2; f3; f4])
         end
+        x0 = vec([vec(sigma_tr); R; vec(X_1); vec(X_2)])
+        F = similar(x0)
+        res = nlsolve(g!, x0)
+        x = res.zero
+        sigma = reshape(x[1:9],3,3)
+        R = x[10]
+        X_1 = reshape(x[11:19], 3,3)
+        X_2 = reshape(x[20:28], 3,3)
+        dotp = ((von_mises_stress(sigma - X_1 - X_2) - R)/K_n)^n_n
+        dp = dotp*dt
+        s = deviator(sigma - X_1 - X_2)
+        n = 3/2*s/von_mises_stress(sigma - X_1 - X_2)
+        dvarepsilon_pl = dp*n
+        varepsilon_pl += dvarepsilon_pl
+        varepsilon_el += dvarepsilon_tot - dvarepsilon_pl
     end
 
     # Store variables
@@ -149,3 +181,11 @@ while t < T
     push!(varepsilon_pls, varepsilon_pl)
     push!(varepsilon_els, varepsilon_el)
 end
+
+qs = [von_mises_stress(sigma_i) for sigma_i in sigmas]
+ps = [tr(sigma_i)/3 for sigma_i in sigmas]
+xs = [von_mises_stress(X_1s[i] + X_2s[i]) for i in 1:length(ts)]
+plot(ps, qs, label="Stress")
+plot!(ps, xs+Rs, label="Static yield surface")
+xlabel!("Hydrostatic stress")
+ylabel!("Von Mises stress")
