@@ -103,7 +103,9 @@ mutable struct IdealPlastic <: AbstractMaterial
     yield_stress :: Float64
     # Internal state variables
     plastic_strain :: Matrix{Float64}
+    dplastic_strain :: Matrix{Float64}
     plastic_multiplier :: Float64
+    dplastic_multiplier :: Float64
 end
 
 function IdealPlastic(element, ip, time)
@@ -113,9 +115,12 @@ function IdealPlastic(element, ip, time)
     yield_stress = element("yield stress", ip, time)
     # Internal variables
     plastic_strain = element("plastic strain", ip, time)
+    dplastic_strain = zeros(3, 3)
     plastic_multiplier = 0.0
+    dplastic_multiplier = 0.0
     return IdealPlastic(youngs_modulus, poissons_ratio, yield_stress,
-                        plastic_strain, plastic_multiplier)
+                        plastic_strain, dplastic_strain, plastic_multiplier,
+                        dplastic_multiplier)
 end
 
 function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
@@ -175,8 +180,8 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
         n = 3.0/2.0*stress_dev/stress_v
         dla = (stress_v - material.yield_stress)/(3.0*G)
         dstrain_pl = dla*n
-        material.plastic_strain += dstrain_pl
-        material.plastic_multiplier += dla
+        material.dplastic_strain = dstrain_pl
+        material.dplastic_multiplier = dla
         dstrain_el = dstrain - dstrain_pl
         dstress = lambda*tr(dstrain_el)*I + 2.0*mu*dstrain_el
         stress = stress0 + dstress
@@ -189,7 +194,8 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
         D = material_matrix
         dg = df = [n[1,1], n[2,2], n[3,3], n[1,2], n[2,3], n[3,1]]
         material_matrix[:,:] .= D - (D*dg*df'*D) / (df'*D*dg)
-        @info("n", n)
+        material_matrix[abs.(material_matrix) .< 1.0e-9] .= 0.0
+        @info("results", material_matrix, stress0, dstrain)
     end
 
     return nothing
@@ -276,6 +282,14 @@ while analysis.properties.time < time_end
     update!(body_element, "displacement", analysis.properties.time => Dict(j => zeros(3) for j in 1:8))
     @info("time = $(analysis.properties.time)")
     run!(analysis)
+    for ip in get_integration_points(body_element)
+        material = ip("material", analysis.properties.time)
+        material.plastic_multiplier += material.dplastic_multiplier
+        material.plastic_strain += material.dplastic_strain
+        material.dplastic_multiplier = 0.0
+        fill!(material.dplastic_strain, 0.0)
+    end
+    # update material internal parameters
 end
 
 close(xdmf)
