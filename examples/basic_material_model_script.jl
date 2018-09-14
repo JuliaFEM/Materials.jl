@@ -8,7 +8,7 @@ plotly()
 # Tensors
 I_ = Matrix(1.0I,3,3) # Second order identity tensor
 II = zeros(3,3,3,3)
-@einsum II[i,j,k,l] = I_[i,k]*I_[j,l] # Fourth order symmetric identity tensor
+@einsum II[i,j,k,l] = 0.5*(I_[i,k]*I_[j,l] + I_[i,l]*I_[j,k]) # Fourth order symmetric identity tensor
 IxI = zeros(3,3,3,3)
 @einsum IxI[i,j,k,l] = I_[i,j]*I_[k,l] # "Trace" tensor
 P = II - 1/3*IxI # Deviatoric projection tensor
