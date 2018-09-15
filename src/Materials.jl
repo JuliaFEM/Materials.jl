@@ -62,6 +62,20 @@ end
 
 export AbstractMaterial, Material
 
+function preprocess_analysis! end
+function preprocess_increment! end
+function postprocess_analysis! end
+function postprocess_increment! end
+function integrate_material! end
+export preprocess_analysis!
+export preprocess_increment!
+export postprocess_analysis!
+export postprocess_increment!
+export integrate_material!
+
+include("idealplastic.jl")
+export IdealPlastic
+
 # include("olli.jl") # to be uncommented when old code is fixed.
 
 end
