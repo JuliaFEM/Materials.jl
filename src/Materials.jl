@@ -3,15 +3,21 @@
 
 module Materials
 
-using FEMBase, LinearAlgebra
+using FEMBase, LinearAlgebra, ForwardDiff, Tensors
 
 abstract type AbstractMaterial end
 
 """
     Material{M<:AbstractMaterial}
 
-Stress σ, strain ε, material_stiffness D = Δσ/Δε, D(t) = ∂σ(t)/∂ε(t).
-Properties contains internal material state parameters.
+- Stress σ
+- Strain ε
+- Stress increment Δσ
+- Strain increment Δε
+- Jacobian matrix of the consitutive model, ∂Δσ/∂Δε
+
+Properties contains internal material state parameters, like Young's modulus,
+Poissons ratio, yield stress limit, and so on.
 
 # Example
 
@@ -23,10 +29,13 @@ struct LinearIsotropicHooke <: AbstractMaterial
 end
 
 """
-struct Material{M<:AbstractMaterial}
+mutable struct Material{M<:AbstractMaterial}
     stress :: Vector{Float64}
     strain :: Vector{Float64}
-    material_stiffness :: Matrix{Float64}
+    dstress :: Vector{Float64}
+    dstrain :: Vector{Float64}
+    jacobian :: Matrix{Float64}
+    dtime :: Float64
     properties :: M
 end
 
@@ -43,10 +52,12 @@ Assume there's a material `LinearIsotropicHooke`.
 function Material(::Type{M}, material_properties) where {M}
     stress = zeros(6)
     strain = zeros(6)
-    material_stiffness = zeros(6,6)
-    @info("material properties = $material_properties")
+    dstress = zeros(6)
+    dstrain = zeros(6)
+    jacobian = zeros(6,6)
+    dtime = 0.0
     properties = M(material_properties...)
-    return Material(stress, strain, material_stiffness, properties)
+    return Material(stress, strain, dstress, dstrain, jacobian, dtime, properties)
 end
 
 export AbstractMaterial, Material
