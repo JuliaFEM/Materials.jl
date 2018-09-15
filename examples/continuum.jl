@@ -63,12 +63,12 @@ function FEMBase.assemble_elements!(problem::Problem{Continuum3D},
 
             # Calculate stress response
             calculate_stress!(material, element, ip, time, dtime, D, S)
-            gradu = element("displacement", ip, time, Val{:Grad})
-            strain = 0.5*(gradu + gradu')
-            strain_vector = [strain[1,1], strain[2,2], strain[3,3], strain[1,2], strain[2,3], strain[3,1]]
-            update!(ip, "stress", time => copy(S))
-            update!(ip, "strain", time => strain_vector)
-            update!(ip, "material matrix", time => D)
+            # gradu = element("displacement", ip, time, Val{:Grad})
+            # strain = 0.5*(gradu + gradu')
+            # strain_vector = [strain[1,1], strain[2,2], strain[3,3], strain[1,2], strain[2,3], strain[3,1]]
+            # update!(ip, "stress", time => copy(S))
+            # update!(ip, "strain", time => strain_vector)
+            # update!(ip, "material matrix", time => D)
 
             #@info("material matrix", D)
 
