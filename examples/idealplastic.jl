@@ -21,7 +21,11 @@ function IdealPlastic(element, ip, time)
     poissons_ratio = element("poissons ratio", ip, time)
     yield_stress = element("yield stress", ip, time)
     # Internal variables
-    plastic_strain = element("plastic strain", ip, time)
+    if haskey(element, "plastic strain")
+        plastic_strain = element("plastic strain", ip, time)
+    else
+        plastic_strain = zeros(3, 3)
+    end
     dplastic_strain = zeros(3, 3)
     plastic_multiplier = 0.0
     dplastic_multiplier = 0.0
@@ -30,29 +34,32 @@ function IdealPlastic(element, ip, time)
                         dplastic_multiplier)
 end
 
+function initialize_material!()
+
+end
+
 function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
                            material_matrix, stress_vector)
+
     # Update material parameters
     material.youngs_modulus = element("youngs modulus", ip, time)
     material.poissons_ratio = element("poissons ratio", ip, time)
     material.yield_stress = element("yield stress", ip, time)
-
     gradu0 = element("displacement", ip, time-dtime, Val{:Grad})
     gradu = element("displacement", ip, time, Val{:Grad})
-    X = element("geometry", ip, time)
-
     strain0 = 0.5*(gradu0 + gradu0')
     strain = 0.5*(gradu + gradu')
     dstrain = strain - strain0
-
     E = material.youngs_modulus
     nu = material.poissons_ratio
     mu = E/(2.0*(1.0+nu))
     lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
     G = 0.5*E/(1.0+nu)
-
     strain_elastic0 = strain0 - material.plastic_strain
     stress0 = lambda*tr(strain_elastic0)*I + 2.0*mu*strain_elastic0
+    calculate_stress_vector!(material, stress0, dstrain, dtime, stress_vector)
+    calculate_material_stiffness_matrix!(material, stress0, dstrain, dtime, material_matrix)
+
 
     strain_elastic = strain - material.plastic_strain
     stress_trial = lambda*tr(strain_elastic)*I + 2.0*mu*strain_elastic
@@ -76,13 +83,7 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
     material_matrix[1,3] = lambda
     material_matrix[3,1] = lambda
 
-    # if stress_v > 150.0
-    #     @info("stress_v = $stress_v")
-    #     @info("stress_trial = $stress_trial")
-    #     error("this should not be happening")
-    # end
-
-    if stress_v < material.yield_stress
+    if stress_v <= material.yield_stress
         stress_vector[1] = stress_trial[1,1]
         stress_vector[2] = stress_trial[2,2]
         stress_vector[3] = stress_trial[3,3]
@@ -91,9 +92,6 @@ function calculate_stress!(material::AbstractMaterial, element, ip, time, dtime,
         stress_vector[6] = stress_trial[3,1]
         return nothing
     else
-        # @info "Plastic strain at X = $X, element # $(element.id), time = $time, stress_v = $stress_v"
-        # error("should not")
-        # error("plasticity on time $time")
         n = 3.0/2.0*stress_dev/stress_v
         dla = (stress_v - material.yield_stress)/(3.0*G)
         dstrain_pl = dla*n
