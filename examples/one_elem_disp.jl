@@ -1,10 +1,10 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using JuliaFEM, FEMBase, LinearAlgebra
+using JuliaFEM, Materials, FEMBase, LinearAlgebra
+using Materials: calculate_stress!
 
 include("continuum.jl")
-include("idealplastic.jl")
 
 X = Dict(
     1 => [0.0, 0.0, 0.0],
@@ -42,6 +42,8 @@ end
 for element in (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
     update!(element, "displacement 3", 0.0 => 0.0)
     update!(element, "displacement 3", 1.0 => 1.0e-3)
+    update!(element, "displacement 3", 2.0 => -1.0e-3)
+    update!(element, "displacement 3", 3.0 => 1.0e-3)
 end
 
 update!(bc_element_1, "displacement 1", 0.0)
@@ -71,57 +73,79 @@ bc = Problem(Dirichlet, "fix displacement", 3, "displacement")
 add_elements!(body, body_elements)
 add_elements!(bc, bc_elements)
 analysis = Analysis(Nonlinear, "solve problem")
-xdmf = Xdmf("results4"; overwrite=true)
-add_results_writer!(analysis, xdmf)
+#xdmf = Xdmf("one_element_results_5"; overwrite=true)
+#add_results_writer!(analysis, xdmf)
 add_problems!(analysis, body, bc)
-time_end = 1.0
+time_end = 3.0
 dtime = 0.05
 
 for problem in get_problems(analysis)
     initialize!(problem, analysis.properties.time)
 end
+update!(body_element, "displacement", analysis.properties.time => Dict(j => zeros(3) for j in 1:8))
 
-while analysis.properties.time < time_end
+while analysis.properties.time <= time_end
     analysis.properties.time += dtime
-    update!(body_element, "displacement", analysis.properties.time => Dict(j => zeros(3) for j in 1:8))
     @info("time = $(analysis.properties.time)")
     run!(analysis)
+    # Postprocess
     for ip in get_integration_points(body_element)
         material = ip("material", analysis.properties.time)
         material.plastic_multiplier += material.dplastic_multiplier
         material.plastic_strain += material.dplastic_strain
         material.dplastic_multiplier = 0.0
         fill!(material.dplastic_strain, 0.0)
+
+        D = zeros(6,6)
+        S = zeros(6)
+        calculate_stress!(material, body_element, ip, analysis.properties.time, dtime, D, S)
+        gradu = body_element("displacement", ip, analysis.properties.time, Val{:Grad})
+        strain = 0.5*(gradu + gradu')
+        strain_vector = [strain[1,1], strain[2,2], strain[3,3],
+                         2.0*strain[1,2], 2.0*strain[2,3], 2.0*strain[3,1]]
+        update!(ip, "stress", analysis.properties.time => S)
+        update!(ip, "strain", analysis.properties.time => strain_vector)
+        update!(ip, "material matrix", analysis.properties.time => D)
+        update!(ip, "plastic_multiplier", analysis.properties.time => copy(material.plastic_multiplier))
+        update!(ip, "plastic strain", analysis.properties.time => copy(material.plastic_strain))
+
     end
     # update material internal parameters
 end
 
-close(xdmf)
+#close(xdmf)
 
 using Plots
+
+ip = first(get_integration_points(body_element))
+s11(t) = ip("stress", t)[1]
+s22(t) = ip("stress", t)[2]
+s33(t) = ip("stress", t)[3]
+s12(t) = ip("stress", t)[4]
+s23(t) = ip("stress", t)[5]
+s31(t) = ip("stress", t)[6]
+e11(t) = ip("strain", t)[1]
+e22(t) = ip("strain", t)[2]
+e33(t) = ip("strain", t)[3]
+s(t) = ip("stress", t)
+function vmis(t)
+    s11, s22, s33, s12, s23, s31 = ip("stress", t)
+    return sqrt(1/2*((s11-s22)^2 + (s22-s33)^2 + (s33-s11)^2 + 6*(s12^2+s23^2+s31^2)))
+end
+
+t = 0.0:dtime:time_end
+
+u7 = zeros(3, length(t))
+for (i,ti) in enumerate(t)
+    u7[:,i] = body_element("displacement", ti)[7]
+end
+
 if true
-    ip1 = first(get_integration_points(body_element))
-    t = range(0, stop=1.0, length=50)
-    s11(t) = ip1("stress", t)[1]
-    s22(t) = ip1("stress", t)[2]
-    s33(t) = ip1("stress", t)[3]
-    s12(t) = ip1("stress", t)[4]
-    s23(t) = ip1("stress", t)[5]
-    s31(t) = ip1("stress", t)[6]
-    e33(t) = ip1("strain", t)[3]
-    s(t) = ip1("stress", t)
-    function vmis(t)
-        s11, s22, s33, s12, s23, s31 = ip1("stress", t)
-        return sqrt(1/2*((s11-s22)^2 + (s22-s33)^2 + (s33-s11)^2 + 6*(s12^2+s23^2+s31^2)))
-    end
-    y = vmis.(t)
-    x = e33.(t)
-    plot(x, y)
-    # labels = ["s11" "s22" "s33" "s12" "s23" "s31"]
-    # plot(t, s11, title="stress at integration point 1", label="s11")
-    # plot!(t, s22, label="s22")
-    # plot!(t, s33, label="s33")
-    # plot!(t, s12, label="s12")
-    # plot!(t, s23, label="s23")
-    # plot!(t, s31, label="s31")
+    plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$")
+    plot!(e22.(t), s22.(t), label="\$\\sigma_{22}\$")
+    plot!(e33.(t), s33.(t), label="\$\\sigma_{33}\$")
+end
+
+if false
+    plot(t, u7', labels=["u1" "u2" "u3"])
 end
