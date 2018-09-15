@@ -76,6 +76,9 @@ export integrate_material!
 include("idealplastic.jl")
 export IdealPlastic
 
+include("simulator.jl")
+
+
 # include("olli.jl") # to be uncommented when old code is fixed.
 
 end
