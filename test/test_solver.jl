@@ -3,19 +3,17 @@
 
 using Materials
 using ForwardDiff
-using Tensors
-using Base.Test
 
 @testset "Solvers: find root, approach positive side" begin
-    f(x) = x.^2 - 5
-    df(x) = ForwardDiff.jacobian(f, x)
+    f = x -> x.^2 .- 5
+    df = x -> ForwardDiff.jacobian(f, x)
     x = vec([3])
-    root = find_root(f, df, x; max_iter=50, norm_acc=1e-9)
+    root = Materials.find_root(f, df, x; max_iter=50, norm_acc=1e-9)
     @test isapprox(root, [sqrt(5)])
 end
 
 @testset "Solvers: find root, approach positive side" begin
-    f(x) = x.^2 - 5
+    f(x) = x.^2 .- 5
     df(x) = ForwardDiff.jacobian(f, x)
     x = vec([1])
     root = find_root(f, df, x; max_iter=50, norm_acc=1e-9)
@@ -39,14 +37,14 @@ end
     nu = 0.3
     D = Materials.calc_elastic_tensor(E, nu)
 
-    stress = Tensor{2,3}([  205.0   0.0  0.0;
-                              0.0 205.0  0.0;
-                              0.0   0.0  0.0])
+    stress = [  205.0   0.0  0.0;
+                0.0 205.0  0.0;
+                0.0   0.0  0.0]
 
 
-    dstrain = Tensor{2,3}([ 0.001 0.060 0.010;
-                            0.060 0.000 0.020;
-                            0.010 0.020 0.010])
+    dstrain = [ 0.001 0.060 0.010;
+                0.060 0.000 0.020;
+                0.010 0.020 0.010]
     params = Dict{AbstractString, Any}()
     params["yield_function"] = yield_f
     params["init_stress"] = stress
@@ -54,7 +52,7 @@ end
     params["d_yield_function"] = d_yield_f
     params["D"] = D
     x = zeros(7)
-    x[1:6] += 0.1
+    x[1:6] .+= 0.1
 
     f(x) = radial_return(x, params)
     df(x) = ForwardDiff.jacobian(f, x)

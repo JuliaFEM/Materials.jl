@@ -2,7 +2,18 @@
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
 
 using ForwardDiff
-using Tensors
+using LinearAlgebra
+using Einsum
+
+function dcontract(x, y, ::Type{Val{:SameSize}})
+    return sum(x.*y)
+end
+
+function dcontract(x, y, ::Type{Val{:DiffSize}})
+    retval = typeof(y)(undef, 3,3)
+    @einsum retval[i,j] = x[i,j,k,l]*y[k,l]
+    return retval
+end
 
 """
 Equivalent tensile stress.
@@ -11,8 +22,8 @@ More info can be found from: https://en.wikipedia.org/wiki/Von_Mises_yield_crite
     Section: Reduced von Mises equation for different stress conditions
 """
 function equivalent_stress(stress)
-    stress_dev = stress - 1/3 * trace(stress) * one(Tensor{2,3})
-    return sqrt(3/2 * dcontract(stress_dev, stress_dev))
+    stress_dev = stress - 1/3 * tr(stress) .* Matrix(1.0I,3,3)
+    return sqrt(3/2 * dcontract(stress_dev, stress_dev, Val{:SameSize}))
 end
 
 """
@@ -30,8 +41,8 @@ Analytical gradient of Von Mises yield function
 """
 function d_yield_function(stress, _, ::Type{Val{:VonMises}}) # Dirty hack here to avoid linter
     sigma_eq = equivalent_stress(stress)
-    stress_dev = stress - 1/3 * trace(stress) * one(Tensor{2,3})
-    3./2. * stress_dev / sigma_eq
+    stress_dev = stress - 1/3 * tr(stress) * Matrix(1.0I,3,3)
+    return 3. / 2. * stress_dev / sigma_eq
 end
 
 # Aliases

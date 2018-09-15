@@ -6,9 +6,19 @@ function tensor_to_array(A)
 end
 
 function array_to_tensor(A)
-    Tensor{2,3}([A[1] A[4] A[6];
-                 A[4] A[2] A[5];
-                 A[6] A[5] A[3]])
+    [A[1] A[4] A[6];
+    A[4] A[2] A[5];
+    A[6] A[5] A[3]]
+end
+
+function d(B, C)
+    a = 0
+    for i=1:3
+        for j=1:3
+            a += B[i, j] * C[i, j]
+        end
+    end
+    return a
 end
 
 """
@@ -39,13 +49,13 @@ function radial_return(input, params::Dict{AbstractString, Any})
     dstrain = params["dstrain"]
 
     # Stress rate and total strain
-    stress_tot = stress_base + dstress
+    stress_tot = stress_base .+ dstress
 
     # Calculating plastic strain rate
     dstrain_p = lambda * d_yield_function(stress_tot)
 
     # Calculating equations
-    function_1 = dstress - dcontract(D, dstrain - dstrain_p)
+    function_1 = dstress .- dcontract(D, dstrain - dstrain_p, Val{:DiffSize})
     function_2 = yield_function(stress_tot)
     [tensor_to_array(function_1); function_2]
 end

@@ -1,9 +1,24 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/JuliaFEM.jl/blob/master/LICENSE.md
-using Tensors
 
 kron_delta(i::Integer, j::Integer) = i == j ? 1 : 0
 ident_func(i,j,k,l) = 1/2 * (kron_delta(i,k)*kron_delta(j,l) + kron_delta(i,l)*kron_delta(j,k))
+
+function eye(m::Int64)
+    Matrix(1.0I, m, m)
+end
+
+function init_identity_fourth_order()
+    retval = Array{Float64, 4}(undef, 3, 3, 3, 3)
+    @einsum retval[i,j,k,l] = ident_func(i,j,k,l)
+    return retval
+end
+
+function otimes(x, y)
+    retval = Array{Float64, 4}(undef, 3, 3, 3, 3)
+    @einsum retval[i,j,k,l] = x[i,j]*y[k,l]
+    return retval
+end
 
 """
     calc_elastic_tensor_3D(E, nu)
@@ -17,11 +32,13 @@ function calc_elastic_tensor(E, nu)
     my = E / (2*(1 + nu))
 
     # Identity tensor
-    ident_tensor = one(Tensor{2, 3})
-    II = Tensor{4, 3, Float64}(ident_func)
+    ident_tensor = Matrix(1.0I,3,3)
+    II = init_identity_fourth_order()
+
+    ident_fourth = otimes(ident_tensor, ident_tensor)
 
     # Elastic moduli
-    lambda * otimes(ident_tensor, ident_tensor) + 2*my*II
+    lambda * ident_fourth + 2 * my * II
 end
 
 """
@@ -52,16 +69,18 @@ function calc_elastic_tensor_plane_stress(E, nu)
     lambda = (E * nu) / (1 - nu^2)
 
     # Identity tensor, but do not include sigma_zz element
-    e3 = basevec(Vec{3}, 3)
-    ident_tensor = one(Tensor{2,3}) - otimes(e3, e3)
+    ident_tensor = Matrix(1.0I,3,3)
+    ident_tensor[3, 3] -= 1
 
     # Remove all sigma_xz, sigma_yz and sigma_zz elements
     g = (i,j,k,l) -> case(k, l) ? 0.0 : ident_func(i,j,k,l)
-    II = Tensor{4, 3, Float64}(g)
+    II = Array{Float64, 4}(undef, 3, 3, 3, 3)
+    @einsum II[i,j,k,l] = g(i,j,k,l)
+
+    ident_fourth = otimes(ident_tensor, ident_tensor)
 
     # Elastic moduli
-    lambda * otimes(ident_tensor, ident_tensor) + 2*my*II
-
+    lambda * ident_fourth + 2 * my * II
 end
 
 function calc_elastic_tensor(mat::IsotropicHooke, ::Type{Val{:plane_stress}})
@@ -93,7 +112,7 @@ function generate_strain(gradu, dim, finite_strain::Bool)
     else
         strain_mat = strain
     end
-    Tensor{2, 3}(strain_mat)
+    strain_mat
 end
 
 """
@@ -107,7 +126,7 @@ function generate_deformation_gradient(gradu, dim, finite_strain::Bool)
     else
         F = eye(dim)
     end
-    Tensor{2, dim}(F)
+    F
 end
 
 function plastic_response(plastic_model::VonMises, stress_trial, stress_last, dstrain, D)
@@ -139,7 +158,7 @@ end
 function calculate_stress!(mat::Material, model, gradu, dim, finite_strain, formulation)
     D = calc_elastic_tensor(model.elastic, Val{formulation})
     dstrain = generate_strain(gradu, dim, finite_strain)
-    dstress = dcontract(D, dstrain)
+    dstress = dcontract(D, dstrain, Val{:DiffSize})
 
     stress_last = mat.history_values["stress"][end]
     strain_last = mat.history_values["strain"][end]
