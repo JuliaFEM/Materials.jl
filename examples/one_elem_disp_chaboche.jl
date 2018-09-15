@@ -141,9 +141,32 @@ if true
         s11, s22, s33, s12, s23, s31 = ip1("stress", t)
         return sqrt(1/2*((s11-s22)^2 + (s22-s33)^2 + (s33-s11)^2 + 6*(s12^2+s23^2+s31^2)))
     end
-    plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$", legend=:topleft)
+    path = joinpath("one_elem_disp_chaboche", "unitelement_results.rpt")
+    data = readdlm(path, Float64; skipstart=4)
+    t_ = data[:,1]
+    s11_ = data[:,2]
+    s12_ = data[:,3]
+    s13_ = data[:,4]
+    s22_ = data[:,5]
+    s23_ = data[:,6]
+    s33_ = data[:,7]
+    e11_ = data[:,8]
+    e12_ = data[:,9]
+    e13_ = data[:,10]
+    e22_ = data[:,11]
+    e23_ = data[:,12]
+    e33_ = data[:,13]
+    plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$", legend=:topleft,
+        fg_legend=:transparent, bg_legend=:transparent)
     plot!(e22.(t), s22.(t), label="\$\\sigma_{22}\$")
-    plot!(e33.(t), s33.(t), label="\$\\sigma_{33}\$")
+    plot!(e33.(t), s33.(t), linecolor=:red, label="\$\\sigma_{33}\$")
+    plot!(e11_, s11_, ls=:dash, label="\$\\sigma_{11} \\quad \\mathrm{Commercial}\$")
+    plot!(e22_, s22_, ls=:dash, label="\$\\sigma_{22} \\quad \\mathrm{Commercial}\$")
+    plot!(e33_, s33_, linecolor=:black, lw=1, ls=:dash,
+        label="\$\\sigma_{33} \\quad \\mathrm{Commercial}\$")
+    title!("Chaboche plasticity model\nOne element model with uniaxial stress")
+    # xlabel!("\$\\varepsilon\$")
+    # ylabel!("\$\\sigma\$")
     # labels = ["s11" "s22" "s33" "s12" "s23" "s31"]
     # plot(t, s11, title="stress at integration point 1", label="s11")
     # plot!(t, s22, label="s22")
