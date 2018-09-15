@@ -49,6 +49,11 @@ end
 for element in (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
     update!(element, "displacement 3", 0.0 => 0.0)
     update!(element, "displacement 3", 1.0 => 5.0e-3)
+    update!(element, "displacement 3", 3.0 => -5.0e-3)
+    update!(element, "displacement 3", 5.0 => 5.0e-3)
+    update!(element, "displacement 3", 7.0 => -5.0e-3)
+    update!(element, "displacement 3", 9.0 => 5.0e-3)
+    update!(element, "displacement 3", 10.0 => 0.0)
 end
 
 update!(bc_element_1, "displacement 1", 0.0)
@@ -86,7 +91,8 @@ analysis = Analysis(Nonlinear, "solve problem")
 # xdmf = Xdmf("results"; overwrite=true)
 # add_results_writer!(analysis, xdmf)
 add_problems!(analysis, body, bc)
-time_end = 1.0
+# time_end = 1.0
+time_end = 10.0
 dtime = 0.05
 
 for problem in get_problems(analysis)
@@ -100,7 +106,12 @@ while analysis.properties.time < time_end
     run!(analysis)
     for ip in get_integration_points(body_element)
         material = ip("material", analysis.properties.time)
-        update!(ip, "stress", analysis.properties.time => copy(material.stress))
+        material_matrix = zeros(6,6)
+        stress_vector = zeros(6)
+        calculate_stress!(material, body_element, ip,
+            analysis.properties.time, dtime, material_matrix, stress_vector)
+        update!(ip, "stress", analysis.properties.time => stress_vector)
+        # update!(ip, "stress", analysis.properties.time => copy(material.stress))
         update!(ip, "plastic strain", analysis.properties.time => copy(material.plastic_strain))
         update!(ip, "cumulative equivalent plastic strain", analysis.properties.time => copy(material.cumulative_equivalent_plastic_strain))
         update!(ip, "backstress 1", analysis.properties.time => copy(material.backstress1))
@@ -130,7 +141,7 @@ if true
         s11, s22, s33, s12, s23, s31 = ip1("stress", t)
         return sqrt(1/2*((s11-s22)^2 + (s22-s33)^2 + (s33-s11)^2 + 6*(s12^2+s23^2+s31^2)))
     end
-    plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$")
+    plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$", legend=:topleft)
     plot!(e22.(t), s22.(t), label="\$\\sigma_{22}\$")
     plot!(e33.(t), s33.(t), label="\$\\sigma_{33}\$")
     # labels = ["s11" "s22" "s33" "s12" "s23" "s31"]
