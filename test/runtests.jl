@@ -7,4 +7,7 @@ using FEMBase, Materials, Test
     @testset "test abstract material" begin
         include("test_abstract_material.jl")
     end
+    @testset "test ideal plastic material model" begin
+        include("test_idealplastic.jl")
+    end
 end
