@@ -13,6 +13,13 @@ function FEMBase.assemble_elements!(problem::Problem{Continuum3D},
                                     elements::Vector{Element{Hex8}},
                                     time::Float64)
 
+
+    for element in elements
+        for ip in get_integration_points(element)
+            material = ip("material", time)
+            preprocess_increment!(material, element, ip, time)
+        end
+    end
     bi = BasisInfo(Hex8)
 
     dim = 3
@@ -62,14 +69,9 @@ function FEMBase.assemble_elements!(problem::Problem{Continuum3D},
             end
 
             # Calculate stress response
-            calculate_stress!(material, element, ip, time, dtime, D, S)
-            gradu = element("displacement", ip, time, Val{:Grad})
-            strain = 0.5*(gradu + gradu')
-            strain_vector = [strain[1,1], strain[2,2], strain[3,3], strain[1,2], strain[2,3], strain[3,1]]
-            update!(ip, "stress", time => copy(S))
-            update!(ip, "strain", time => strain_vector)
-            update!(ip, "material matrix", time => D)
-
+            integrate_material!(material)
+            D = material.jacobian
+            S = material.stress + material.dstress
             #@info("material matrix", D)
 
             # Material stiffness matrix
