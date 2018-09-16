@@ -90,15 +90,20 @@ function postprocess_increment!(material::Material{M}, element, ip, time) where 
     return nothing
 end
 
-function postprocess_analysis!(material::Material{IdealPlastic}, element, ip, time)
-    # TODO: why?
-    preprocess_increment!(material, element, ip, time)
-    integrate_material!(material) # one more time!
+function postprocess_analysis!(material::Material{IdealPlastic})
     props = material.properties
     material.stress .+= material.dstress
     material.strain .+= material.dstrain
     props.plastic_strain .+= props.dplastic_strain
     props.plastic_multiplier += props.dplastic_multiplier
+    return nothing
+end
+
+function postprocess_analysis!(material::Material{IdealPlastic}, element, ip, time)
+    # TODO: why?
+    preprocess_increment!(material, element, ip, time)
+    integrate_material!(material) # one more time!
+    postprocess_analysis!(material)
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     return nothing
