@@ -78,6 +78,8 @@ export IdealPlastic
 
 include("simulator.jl")
 
+include("chaboche.jl")
+export Chaboche
 
 # include("olli.jl") # to be uncommented when old code is fixed.
 
