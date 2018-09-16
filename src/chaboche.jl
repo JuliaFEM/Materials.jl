@@ -254,9 +254,7 @@ function postprocess_increment!(material::Material{Chaboche}, element, ip, time)
     return nothing
 end
 
-function postprocess_analysis!(material::Material{Chaboche}, element, ip, time)
-    preprocess_increment!(material, element, ip, time)
-    integrate_material!(material)
+function postprocess_analysis!(material::Material{Chaboche})
     mat = material.properties
     material.stress .+= material.dstress
     material.strain .+= material.dstrain
@@ -265,6 +263,13 @@ function postprocess_analysis!(material::Material{Chaboche}, element, ip, time)
     mat.backstress1 .+= mat.dbackstress1
     mat.backstress2 .+= mat.dbackstress2
     mat.yield_stress += mat.dyield_stress
+end
+
+function postprocess_analysis!(material::Material{Chaboche}, element, ip, time)
+    preprocess_increment!(material, element, ip, time)
+    integrate_material!(material)
+    postprocess_analysis!(material)
+    mat = material.properties
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     update!(ip, "plastic strain", time => copy(mat.plastic_strain))
