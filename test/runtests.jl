@@ -10,7 +10,9 @@ using FEMBase, Materials, Test
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
-
+    @testset "test chaboche material model" begin
+        include("test_chaboche.jl")
+    end
     @testset "test simulator" begin
         include("test_simulator.jl")
     end
