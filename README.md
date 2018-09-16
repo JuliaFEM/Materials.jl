@@ -7,3 +7,4 @@ Computational material models
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliafem.github.io/Materials.jl/stable)
 [![](https://img.shields.io/badge/docs-latest-blue.svg)](https://juliafem.github.io/Materials.jl/latest)
 [![](docs/src/figs/plastic_joing.png)]
+[![](examples/one_elem_disp_chaboche/comparison_with_commercial.png)]
