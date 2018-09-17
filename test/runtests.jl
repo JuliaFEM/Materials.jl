@@ -4,6 +4,7 @@
 using FEMBase, Materials, Test
 
 @testset "Test Materials.jl" begin
+
     @testset "test abstract material" begin
         include("test_abstract_material.jl")
     end
@@ -22,4 +23,8 @@ using FEMBase, Materials, Test
     @testset "test ideal plastic pure shear" begin
         include("test_shearstrainloading_idealplastic.jl")
     end
+    @testset "test viscoplastic" begin
+        include("test_viscoplastic.jl")
+    end
+
 end

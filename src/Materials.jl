@@ -83,4 +83,7 @@ include("oneelementsimulator.jl")
 include("chaboche.jl")
 export Chaboche
 
+include("viscoplastic.jl")
+export ViscoPlastic
+
 end
