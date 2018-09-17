@@ -20,7 +20,7 @@ function initialize!(simulator, strains, times)
     return nothing
 end
 
-function run!(simulator)
+function run!(simulator::Simulator)
     material = simulator.material
     times = simulator.times
     strains = simulator.strains

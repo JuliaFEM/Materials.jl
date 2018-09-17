@@ -140,6 +140,7 @@ function integrate_material!(material::Material{IdealPlastic})
         stress_h = 1.0/3.0*sum(stress_tr[1:3])
         stress_dev = stress_tr - stress_h*[1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
         n = 3.0/2.0*stress_dev/stress_v
+        n[4:end] .*= 2.0
         dla = 1.0/(3.0*mu)*(stress_v - mat.yield_stress)
         dstrain_pl = dla*n
         mat.dplastic_strain = dstrain_pl
