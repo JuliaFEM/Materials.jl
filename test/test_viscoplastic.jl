@@ -21,15 +21,13 @@ using FEMBase, Materials, Test, ForwardDiff
     integrate_material!(mat)
     @test isapprox(mat.stress+mat.dstress, [50.0, 0.0, 00.0, 0.0, 0.0, 0.0])
 
-    mat.strain .+= mat.dstrain
-    mat.stress .+= mat.dstress
+    postprocess_analysis!(mat)
 
     integrate_material!(mat)
     @test isapprox(mat.stress+mat.dstress, [100.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     @test isapprox(mat.properties.dplastic_multiplier, 0.0; atol=1.0e-12)
 
-    mat.strain .+= mat.dstrain
-    mat.stress .+= mat.dstress
+    postprocess_analysis!(mat)
 
     integrate_material!(mat)
     @test mat.properties.dplastic_strain[1] > 0
