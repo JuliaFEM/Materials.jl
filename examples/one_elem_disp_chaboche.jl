@@ -1,10 +1,9 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using JuliaFEM, FEMBase, LinearAlgebra
+using JuliaFEM, FEMBase, LinearAlgebra, Materials, DelimitedFiles
 
 include("continuum.jl")
-include("chaboche.jl")
 
 X = Dict(
     1 => [0.0, 0.0, 0.0],
@@ -21,6 +20,7 @@ body_elements = [body_element]
 update!(body_elements, "geometry", X)
 update!(body_elements, "youngs modulus", 200.0e3)
 update!(body_elements, "poissons ratio", 0.3)
+update!(body_elements, "yield stress", 100.0)
 update!(body_elements, "K_n", 100.0)
 update!(body_elements, "n_n", 10.0)
 update!(body_elements, "C_1", 10000.0)
@@ -29,7 +29,6 @@ update!(body_elements, "C_2", 50000.0)
 update!(body_elements, "D_2", 1000.0)
 update!(body_elements, "Q", 50.0)
 update!(body_elements, "b", 0.1)
-update!(body_elements, "yield stress", 100.0)
 
 bc_element_1 = Element(Poi1, (1,))
 bc_element_2 = Element(Poi1, (2,))
@@ -73,14 +72,10 @@ update!(bc_element_8, "displacement 1", 0.0)
 
 # Initialize material model to integration points
 for ip in get_integration_points(body_element)
-    update!(ip, "yield stress", 0.0 => body_element("yield stress", ip, 0.0))
-    update!(ip, "plastic strain", 0.0 => zeros(6))
-    update!(ip, "stress", 0.0 => zeros(6))
-    update!(ip, "strain", 0.0 => zeros(6))
-    update!(ip, "backstress 1", 0.0 => zeros(6))
-    update!(ip, "backstress 2", 0.0 => zeros(6))
-    update!(ip, "cumulative equivalent plastic strain", 0.0 => 0.0)
-    ip.fields["material"] = field(Chaboche(body_element, ip, 0.0))
+    mat = Material(Chaboche, tuple())
+    mat.dtime = 0.05
+    Materials.initialize!(mat, body_element, ip, 0.0)
+    ip.fields["material"] = field(mat)
 end
 
 body = Problem(Continuum3D, "1 element problem", 3)
@@ -96,27 +91,25 @@ time_end = 10.0
 dtime = 0.05
 
 for problem in get_problems(analysis)
-    initialize!(problem, analysis.properties.time)
+    FEMBase.initialize!(problem, analysis.properties.time)
 end
 
 while analysis.properties.time < time_end
     analysis.properties.time += dtime
     update!(body_element, "displacement", analysis.properties.time => Dict(j => zeros(3) for j in 1:8))
     @info("time = $(analysis.properties.time)")
+    for element in body_elements
+        for ip in get_integration_points(element)
+            material = ip("material", analysis.properties.time)
+            preprocess_analysis!(material, element, ip, analysis.properties.time)
+        end
+    end
     run!(analysis)
-    for ip in get_integration_points(body_element)
-        material = ip("material", analysis.properties.time)
-        material_matrix = zeros(6,6)
-        stress_vector = zeros(6)
-        calculate_stress!(material, body_element, ip,
-            analysis.properties.time, dtime, material_matrix, stress_vector)
-        update!(ip, "stress", analysis.properties.time => stress_vector)
-        # update!(ip, "stress", analysis.properties.time => copy(material.stress))
-        update!(ip, "plastic strain", analysis.properties.time => copy(material.plastic_strain))
-        update!(ip, "cumulative equivalent plastic strain", analysis.properties.time => copy(material.cumulative_equivalent_plastic_strain))
-        update!(ip, "backstress 1", analysis.properties.time => copy(material.backstress1))
-        update!(ip, "backstress 2", analysis.properties.time => copy(material.backstress2))
-        update!(ip, "yield stress", analysis.properties.time => copy(material.yield_stress))
+    for element in body_elements
+        for ip in get_integration_points(element)
+            material = ip("material", analysis.properties.time)
+            postprocess_analysis!(material, element, ip, analysis.properties.time)
+        end
     end
     # update material internal parameters
 end
