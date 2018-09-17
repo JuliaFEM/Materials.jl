@@ -85,7 +85,7 @@ function get_bc_elements(loading::AxialStrainLoading)
     return bc_elements
 end
 
-function get_bc_elements(elements, loading::ShearStrainLoading)
+function get_bc_elements(loading::ShearStrainLoading)
     bc_element_1 = Element(Poi1, (1,))
     bc_element_2 = Element(Poi1, (2,))
     bc_element_3 = Element(Poi1, (3,))

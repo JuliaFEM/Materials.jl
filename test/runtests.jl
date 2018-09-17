@@ -19,4 +19,7 @@ using FEMBase, Materials, Test
     @testset "test one element simulator" begin
         include("test_oneelementsimulator.jl")
     end
+    @testset "test ideal plastic pure shear" begin
+        include("test_shearstrainloading_idealplastic.jl")
+    end
 end
