@@ -16,4 +16,7 @@ using FEMBase, Materials, Test
     @testset "test simulator" begin
         include("test_simulator.jl")
     end
+    @testset "test one element simulator" begin
+        include("test_oneelementsimulator.jl")
+    end
 end

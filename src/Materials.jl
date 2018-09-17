@@ -78,6 +78,8 @@ export IdealPlastic
 
 include("simulator.jl")
 
+include("oneelementsimulator.jl")
+
 include("chaboche.jl")
 export Chaboche
 

@@ -65,7 +65,7 @@ for element in body_elements
     for ip in get_integration_points(element)
         material = Material(IdealPlastic, tuple())
         ip.fields["material"] = field(material)
-        Materials.initialize!(material, element, ip, 0.0)
+        FEMBase.initialize!(material, element, ip, 0.0)
     end
 end
 
