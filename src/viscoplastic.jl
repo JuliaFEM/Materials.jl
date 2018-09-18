@@ -119,23 +119,29 @@ end
 ##################
 # JuliaFEM hooks #
 ##################
-function FEMBase.initialize!(material::Material{ViscoPlastic}, element, ip, time)
-    if !haskey(ip, "stress")
-        update!(ip, "stress", time => copy(material.stress))
-    end
-    if !haskey(ip, "strain")
-        update!(ip, "strain", time => copy(material.strain))
-    end
-end
 
-""" Preprocess step before increment start. """
-function preprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
-    gradu = element("displacement", ip, time, Val{:Grad})
-    time_last = element("time_last", ip)
-    strain = 0.5*(gradu + gradu')
-    strainvec = [strain[1,1], strain[2,2], strain[3,3],
-                 2.0*strain[1,2], 2.0*strain[2,3], 2.0*strain[3,1]]
-    material.dstrain = (strainvec - material.strain)
+function material_preprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
+    material.dtime = time - material.time
+
+    # interpolate / update fields from elements to material
+    mat = material.properties
+    mat.youngs_modulus = element("youngs modulus", ip, time)
+    mat.poissons_ratio = element("poissons ratio", ip, time)
+
+    if haskey(element, "yield stress")
+        mat.yield_stress = element("yield stress", ip, time)
+    else
+        mat.yield_stress = Inf
+    end
+
+    if haskey(element, "plastic strain")
+        plastic_strain = element("plastic strain", ip, time)
+    end
+
+    # reset all incremental variables ready for next iteration
+    fill!(mat.dplastic_strain, 0.0)
+    mat.dplastic_multiplier = 0.0
+
     return nothing
 end
 
@@ -212,59 +218,15 @@ end
 #     return nothing
 # end
 
-
-""" Preprocess step of material before analysis start. """
-function preprocess_analysis!(material::Material{ViscoPlastic}, element, ip, time)
-
-    # TODO
-    # for fn in fieldnames(M)
-    #     fn2 = replace("$fn", "_" => " ")
-    #     if haskey(element, fn2)
-    #         fv = element(fn2, ip, time)
-    #         setproperty!(mat.properties, fn, fv)
-    #     else
-    #         warn("Unable to update field $fn from element to material.")
-    #     end
-    #     if startswith(fn2, "d") && fn2[2:end]
-    # end
-
-    # interpolate / update fields from elements to material
-    mat = material.properties
-    mat.youngs_modulus = element("youngs modulus", ip, time)
-    mat.poissons_ratio = element("poissons ratio", ip, time)
-
-    if haskey(element, "yield stress")
-        mat.yield_stress = element("yield stress", ip, time)
-    else
-        mat.yield_stress = Inf
-    end
-
-    if haskey(element, "plastic strain")
-        plastic_strain = element("plastic strain", ip, time)
-    end
-
-    # reset all incremental variables ready for next iteration
-    fill!(mat.dplastic_strain, 0.0)
-    mat.dplastic_multiplier = 0.0
-
-    return nothing
-end
-
-
-function postprocess_analysis!(material::Material{ViscoPlastic})
+function material_postprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
     props = material.properties
-    material.stress .+= material.dstress
-    material.strain .+= material.dstrain
-    props.plastic_strain .+= props.dplastic_strain
+    # material_preprocess_iteration!(material, element, ip, time)
+    # integrate_material!(material) # one more time!
+    material.stress += material.dstress
+    material.strain += material.dstrain
+    material.time += material.dtime
+    props.plastic_strain += props.dplastic_strain
     props.plastic_multiplier += props.dplastic_multiplier
-end
-
-
-function postprocess_analysis!(material::Material{ViscoPlastic}, element, ip, time)
-    # TODO: why?
-    preprocess_increment!(material, element, ip, time)
-    integrate_material!(material) # one more time!
-    postprocess_analysis!(material)
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     return nothing

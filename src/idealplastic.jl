@@ -29,29 +29,15 @@ function IdealPlastic()
                         dplastic_multiplier, use_ad)
 end
 
-function FEMBase.initialize!(material::Material{IdealPlastic}, element, ip, time)
-    if !haskey(ip, "stress")
-        update!(ip, "stress", time => copy(material.stress))
-    end
-    if !haskey(ip, "strain")
-        update!(ip, "strain", time => copy(material.strain))
-    end
-end
+material_preprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
+material_postprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
+material_preprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
+material_postprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
+material_preprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
+material_postprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 
-""" Preprocess step of material before analysis start. """
-function preprocess_analysis!(material::Material{IdealPlastic}, element, ip, time)
-
-    # TODO
-    # for fn in fieldnames(M)
-    #     fn2 = replace("$fn", "_" => " ")
-    #     if haskey(element, fn2)
-    #         fv = element(fn2, ip, time)
-    #         setproperty!(mat.properties, fn, fv)
-    #     else
-    #         warn("Unable to update field $fn from element to material.")
-    #     end
-    #     if startswith(fn2, "d") && fn2[2:end]
-    # end
+function material_preprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
+    material.dtime = time - material.time
 
     # interpolate / update fields from elements to material
     mat = material.properties
@@ -72,40 +58,6 @@ function preprocess_analysis!(material::Material{IdealPlastic}, element, ip, tim
     fill!(mat.dplastic_strain, 0.0)
     mat.dplastic_multiplier = 0.0
 
-    return nothing
-end
-
-""" Preprocess step before increment start. """
-function preprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
-    gradu = element("displacement", ip, time, Val{:Grad})
-    strain = 0.5*(gradu + gradu')
-    strainvec = [strain[1,1], strain[2,2], strain[3,3],
-                 2.0*strain[1,2], 2.0*strain[2,3], 2.0*strain[3,1]]
-    material.dstrain = strainvec - material.strain
-    return nothing
-end
-
-""" Material postprocess step after increment finish. """
-function postprocess_increment!(material::Material{M}, element, ip, time) where {M}
-    return nothing
-end
-
-function postprocess_analysis!(material::Material{IdealPlastic})
-    props = material.properties
-    material.stress .+= material.dstress
-    material.strain .+= material.dstrain
-    props.plastic_strain .+= props.dplastic_strain
-    props.plastic_multiplier += props.dplastic_multiplier
-    return nothing
-end
-
-function postprocess_analysis!(material::Material{IdealPlastic}, element, ip, time)
-    # TODO: why?
-    preprocess_increment!(material, element, ip, time)
-    integrate_material!(material) # one more time!
-    postprocess_analysis!(material)
-    update!(ip, "stress", time => copy(material.stress))
-    update!(ip, "strain", time => copy(material.strain))
     return nothing
 end
 
@@ -140,15 +92,26 @@ function integrate_material!(material::Material{IdealPlastic})
         stress_h = 1.0/3.0*sum(stress_tr[1:3])
         stress_dev = stress_tr - stress_h*[1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
         n = 3.0/2.0*stress_dev/stress_v
-        dla = 1.0/(3.0*mu)*(stress_v - mat.yield_stress)
-        dstrain_pl = dla*n
-        mat.dplastic_strain = dstrain_pl
-        mat.dplastic_multiplier = dla
-        dstress[:] .= D*(dstrain - dstrain_pl)
+        n[4:end] .*= 2.0
+        mat.dplastic_multiplier = 1.0/(3.0*mu)*(stress_v - mat.yield_stress)
+        mat.dplastic_strain = mat.dplastic_multiplier*n
+        dstress[:] .= D*(dstrain - mat.dplastic_strain)
         D[:,:] .-= (D*n*n'*D) / (n'*D*n)
         return nothing
     end
-
     return nothing
+end
 
+function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
+    props = material.properties
+    # material_preprocess_iteration!(material, element, ip, time)
+    # integrate_material!(material) # one more time!
+    material.stress += material.dstress
+    material.strain += material.dstrain
+    material.time += material.dtime
+    props.plastic_strain += props.dplastic_strain
+    props.plastic_multiplier += props.dplastic_multiplier
+    update!(ip, "stress", time => copy(material.stress))
+    update!(ip, "strain", time => copy(material.strain))
+    return nothing
 end
