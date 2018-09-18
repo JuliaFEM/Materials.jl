@@ -128,6 +128,7 @@ function integrate_material!(material::Material{Chaboche})
         dp = dotp*material.dtime
         s = deviator(stress - X_1 - X_2)
         n = 1.5*s/seff
+        n[4:end] .*= 2.0
         dvarepsilon_pl = dp*n
         mat.dplastic_strain[:] .= dvarepsilon_pl
         mat.dcumulative_equivalent_plastic_strain = dp
@@ -142,7 +143,7 @@ end
 
 material_preprocess_analysis!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_analysis!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
-material_preprocess_increment!(material::Material{Chaboche}, element::Element{Poi1}, ip, time, dtime) = nothing
+material_preprocess_increment!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_increment!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
 material_preprocess_iteration!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_iteration!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
@@ -184,7 +185,7 @@ function material_postprocess_increment!(material::Material{Chaboche}, element, 
     material.strain .+= material.dstrain
     material.time += material.dtime
     mat.plastic_strain .+= mat.dplastic_strain
-    mat.cumulative_equivalent_plastic_strain += mat.cumulative_equivalent_plastic_strain
+    mat.cumulative_equivalent_plastic_strain += mat.dcumulative_equivalent_plastic_strain
     mat.backstress1 .+= mat.dbackstress1
     mat.backstress2 .+= mat.dbackstress2
     mat.R += mat.dR
@@ -225,11 +226,20 @@ function create_nonlinear_system_of_equations(material_::Material{Chaboche}, dva
         dp = dotp*dt
         s = deviator(sigma - X_1 - X_2)
         n = 1.5*s/seff
+        n[4:end] .*= 2.0
         dvarepsilon_pl = dp*n
         f1 = sigma_n - sigma + D*(dvarepsilon_tot - dvarepsilon_pl)
         f2 = R_n - R + b*(Q-R)*dp
-        f3 = X_1n - X_1 + 2.0/3.0*C_1*dp*(n - 1.5*D_1/C_1*X_1)
-        f4 = X_2n - X_2 + 2.0/3.0*C_2*dp*(n - 1.5*D_2/C_2*X_2)
+        if isapprox(C_1, 0.0)
+            f3 = X_1n - X_1
+        else
+            f3 = X_1n - X_1 + 2.0/3.0*C_1*dp*(n - 1.5*D_1/C_1*X_1)
+        end
+        if isapprox(C_2, 0.0)
+            f4 = X_2n - X_2
+        else
+            f4 = X_2n - X_2 + 2.0/3.0*C_2*dp*(n - 1.5*D_2/C_2*X_2)
+        end
         F[:] = [f1; f2; f3; f4]
     end
     return g!
