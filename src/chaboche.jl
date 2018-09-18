@@ -1,6 +1,5 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
-LinearAlgebra, NLsolve
 
 function deviator(stress::Vector{Float64})
     return stress - 1.0/3.0*sum(stress[1:3])*[1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
@@ -141,8 +140,15 @@ function integrate_material!(material::Material{Chaboche})
     return nothing
 end
 
-function initialize!(material::Material{Chaboche}, element, ip, time)
-    # update!(ip, "yield stress", 0.0 => element("yield stress", ip, 0.0))
+material_preprocess_analysis!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
+material_postprocess_analysis!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
+material_preprocess_increment!(material::Material{Chaboche}, element::Element{Poi1}, ip, time, dtime) = nothing
+material_postprocess_increment!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
+material_preprocess_iteration!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
+material_postprocess_iteration!(material::Material{Chaboche}, element::Element{Poi1}, ip, time) = nothing
+
+
+function material_preprocess_analysis!(material::Material{Chaboche}, element, ip, time)
     update!(ip, "plastic strain", 0.0 => zeros(6))
     update!(ip, "stress", 0.0 => zeros(6))
     update!(ip, "strain", 0.0 => zeros(6))
@@ -150,10 +156,12 @@ function initialize!(material::Material{Chaboche}, element, ip, time)
     update!(ip, "backstress 2", 0.0 => zeros(6))
     update!(ip, "cumulative equivalent plastic strain", 0.0 => 0.0)
     update!(ip, "R", 0.0 => 0.0)
+    return nothing
 end
 
-function preprocess_analysis!(material::Material{Chaboche}, element, ip, time)
+function material_preprocess_increment!(material::Material{Chaboche}, element, ip, time)
     mat = material.properties
+    material.dtime = time - material.time
     mat.youngs_modulus = element("youngs modulus", ip, time)
     mat.poissons_ratio = element("poissons ratio", ip, time)
     mat.yield_stress = element("yield stress", ip, time)
@@ -165,47 +173,21 @@ function preprocess_analysis!(material::Material{Chaboche}, element, ip, time)
     mat.D_2 = element("D_2", ip, time)
     mat.Q = element("Q", ip, time)
     mat.b = element("b", ip, time)
-
-    # Use view here?
-    # material.stress[:] .= ip("stress", time)
-    # material.strain[:] .= ip("strain", time)
-    # mat.plastic_strain[:] .= ip("plastic strain", time)
-    # mat.cumulative_equivalent_plastic_strain = ip("cumulative equivalent plastic strain", time)
-    # mat.backstress1[:] .= ip("backstress 1", time)
-    # mat.backstress2[:] .= ip("backstress 2", time)
-    # mat.yield_stress = ip("yield stress", time)
     return nothing
 end
 
-function preprocess_increment!(material::Material{Chaboche}, element, ip, time)
-    gradu = element("displacement", ip, time, Val{:Grad})
-    strain = 0.5*(gradu + gradu')
-    strainvec = [strain[1,1], strain[2,2], strain[3,3],
-                 2.0*strain[1,2], 2.0*strain[2,3], 2.0*strain[3,1]]
-    material.dstrain[:] .= strainvec - material.strain
-    return nothing
-end
-
-function postprocess_increment!(material::Material{Chaboche}, element, ip, time)
-    return nothing
-end
-
-function postprocess_analysis!(material::Material{Chaboche})
+function material_postprocess_increment!(material::Material{Chaboche}, element, ip, time)
+    # preprocess_increment!(material, element, ip, time)
+    # integrate_material!(material)
     mat = material.properties
     material.stress .+= material.dstress
     material.strain .+= material.dstrain
+    material.time += material.dtime
     mat.plastic_strain .+= mat.dplastic_strain
     mat.cumulative_equivalent_plastic_strain += mat.cumulative_equivalent_plastic_strain
     mat.backstress1 .+= mat.dbackstress1
     mat.backstress2 .+= mat.dbackstress2
     mat.R += mat.dR
-end
-
-function postprocess_analysis!(material::Material{Chaboche}, element, ip, time)
-    preprocess_increment!(material, element, ip, time)
-    integrate_material!(material)
-    postprocess_analysis!(material)
-    mat = material.properties
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     update!(ip, "plastic strain", time => copy(mat.plastic_strain))
@@ -215,34 +197,6 @@ function postprocess_analysis!(material::Material{Chaboche}, element, ip, time)
     update!(ip, "R", time => copy(mat.R))
     return nothing
 end
-
-"""
-# Obsolete?
-function Chaboche(element, ip, time)
-    # Material parameters
-    youngs_modulus = element("youngs modulus", ip, time)
-    poissons_ratio = element("poissons ratio", ip, time)
-    yield_stress = element("yield_stress", ip, time)
-    K_n = element("K_n", ip, time)
-    n_n = element("n_n", ip, time)
-    C_1 = element("C_1", ip, time)
-    D_1 = element("D_1", ip, time)
-    C_2 = element("C_2", ip, time)
-    D_2 = element("D_2", ip, time)
-    Q = element("Q", ip, time)
-    b = element("b", ip, time)
-    # Internal parameters
-    stress = ip("stress", time)
-    plastic_strain = ip("plastic strain", time)
-    cumulative_equivalent_plastic_strain = ip("cumulative equivalent plastic strain", time)
-    backstress1 = ip("backstress 1", time)
-    backstress2 = ip("backstress 2", time)
-    R = ip("R", time)
-    return Chaboche(youngs_modulus, poissons_ratio, yield_stress, K_n, n_n, C_1, D_1, C_2, D_2,
-                    Q, b, stress, plastic_strain, cumulative_equivalent_plastic_strain,
-                    backstress1, backstress2, R)
-end
-"""
 
 function create_nonlinear_system_of_equations(material_::Material{Chaboche}, dvarepsilon_tot::Vector{Float64}, dt::Float64)
     material = material_.properties
