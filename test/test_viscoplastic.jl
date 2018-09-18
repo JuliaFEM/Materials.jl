@@ -2,6 +2,11 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using FEMBase, Materials, Test, ForwardDiff
+include("FEMMaterials.jl")
+using .FEMMaterials
+include("MaterialSimulators.jl")
+using .MaterialSimulators
+
 
 @testset "Calculate plastic strain" begin
     dummyel = Element(Hex8, (1, 2, 3, 4, 5, 6, 7, 8))

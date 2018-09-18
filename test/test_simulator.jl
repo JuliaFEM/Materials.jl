@@ -2,7 +2,11 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using Materials, Test
-using Materials: Simulator
+include("FEMMaterials.jl")
+using .FEMMaterials
+include("MaterialSimulators.jl")
+using .MaterialSimulators
+
 
 m1 = 1.0e-3*[-0.3, -0.3, 1.0, 0.0, 0.0, 0.0]
 m2 = 1.0e-3*[-0.5, -0.5, 1.0, 0.0, 0.0, 0.0]
@@ -31,8 +35,8 @@ push!(times, times[end]+dt)
 push!(strains, strains[end] - (m1 + m2)*dt)
 
 sim = Simulator(mat)
-Materials.initialize!(sim, strains, times)
-Materials.run!(sim)
+MaterialSimulators.initialize!(sim, strains, times)
+MaterialSimulators.run!(sim)
 
 s33s = [s[3] for s in sim.stresses]
 @test isapprox(s33s, [0.0, 100.0, 100.0, 0.0, -100.0])

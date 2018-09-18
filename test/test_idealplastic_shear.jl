@@ -2,6 +2,11 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using Materials, FEMBase, Test
+include("FEMMaterials.jl")
+using .FEMMaterials
+include("MaterialSimulators.jl")
+using .MaterialSimulators
+
 
 analysis, problem, element, bc_elements, ip = get_one_element_material_analysis(:IdealPlastic)
 update!(element, "youngs modulus", 200.0e3)

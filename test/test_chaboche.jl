@@ -2,8 +2,12 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using Materials, Test
-using Materials: Simulator
 using DelimitedFiles
+include("FEMMaterials.jl")
+using .FEMMaterials
+include("MaterialSimulators.jl")
+using .MaterialSimulators
+
 
 path = joinpath("test_chaboche", "unitelement_results.rpt")
 data = readdlm(path, Float64; skipstart=4)
@@ -38,9 +42,9 @@ mat.properties.b = 0.1
 
 mat.stress = zeros(6)
 sim = Simulator(mat)
-Materials.initialize!(sim, strains, ts)
+MaterialSimulators.initialize!(sim, strains, ts)
 t0 = time()
-Materials.run!(sim)
+MaterialSimulators.run!(sim)
 t1 = time()
 @info "Test took $(t1-t0)s!"
 s33s = [s[3] for s in sim.stresses]

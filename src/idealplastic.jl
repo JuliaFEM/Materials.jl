@@ -29,38 +29,6 @@ function IdealPlastic()
                         dplastic_multiplier, use_ad)
 end
 
-material_preprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_postprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_preprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_postprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_preprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_postprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-
-function material_preprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
-    material.dtime = time - material.time
-
-    # interpolate / update fields from elements to material
-    mat = material.properties
-    mat.youngs_modulus = element("youngs modulus", ip, time)
-    mat.poissons_ratio = element("poissons ratio", ip, time)
-
-    if haskey(element, "yield stress")
-        mat.yield_stress = element("yield stress", ip, time)
-    else
-        mat.yield_stress = Inf
-    end
-
-    if haskey(element, "plastic strain")
-        plastic_strain = element("plastic strain", ip, time)
-    end
-
-    # reset all incremental variables ready for next iteration
-    fill!(mat.dplastic_strain, 0.0)
-    mat.dplastic_multiplier = 0.0
-
-    return nothing
-end
-
 function integrate_material!(material::Material{IdealPlastic})
     mat = material.properties
 
@@ -99,19 +67,5 @@ function integrate_material!(material::Material{IdealPlastic})
         D[:,:] .-= (D*n*n'*D) / (n'*D*n)
         return nothing
     end
-    return nothing
-end
-
-function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
-    props = material.properties
-    # material_preprocess_iteration!(material, element, ip, time)
-    # integrate_material!(material) # one more time!
-    material.stress += material.dstress
-    material.strain += material.dstrain
-    material.time += material.dtime
-    props.plastic_strain += props.dplastic_strain
-    props.plastic_multiplier += props.dplastic_multiplier
-    update!(ip, "stress", time => copy(material.stress))
-    update!(ip, "strain", time => copy(material.strain))
     return nothing
 end
