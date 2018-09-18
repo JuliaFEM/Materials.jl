@@ -13,6 +13,61 @@ end
 Continuum3D() = Continuum3D(:IdealPlastic)
 FEMBase.get_unknown_field_name(::Continuum3D) = "displacement"
 
+abstract type AbstractLoading end
+
+mutable struct AxialStrainLoading <: AbstractLoading
+    times :: Vector{Float64}
+    loads :: Vector{Float64}
+end
+mutable struct ShearStrainLoading <: AbstractLoading
+    times :: Vector{Float64}
+    loads :: Vector{Float64}
+end
+
+function update_bc_elements!(bc_elements::Vector{Element{Poi1}}, loading::AxialStrainLoading)
+    bc_element_1, bc_element_2, bc_element_3, bc_element_4, bc_element_5, bc_element_6, bc_element_7, bc_element_8 = bc_elements
+    # Fix bottom side
+    for element in (bc_element_1, bc_element_2, bc_element_3, bc_element_4)
+        update!(element, "fixed displacement 3", 0.0)
+    end
+    # Set loading bc
+    for element in (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
+        for (t,f) in zip(loading.times, loading.loads)
+            # @info "Setting displacement 3 at $(t) to $(f)!"
+            update!(element, "fixed displacement 3", t => f)
+        end
+    end
+    # Set rest of boundary conditions
+    update!(bc_element_1, "fixed displacement 1", 0.0)
+    update!(bc_element_1, "fixed displacement 2", 0.0)
+    update!(bc_element_2, "fixed displacement 2", 0.0)
+    update!(bc_element_4, "fixed displacement 1", 0.0)
+    update!(bc_element_5, "fixed displacement 1", 0.0)
+    update!(bc_element_5, "fixed displacement 2", 0.0)
+    update!(bc_element_6, "fixed displacement 2", 0.0)
+    update!(bc_element_8, "fixed displacement 1", 0.0)
+    return nothing
+end
+
+function update_bc_elements!(bc_elements::Vector{Element{Poi1}}, loading::ShearStrainLoading)
+    bc_element_1, bc_element_2, bc_element_3, bc_element_4, bc_element_5, bc_element_6, bc_element_7, bc_element_8 = bc_elements
+    # Fix bottom side
+    for element in (bc_element_1, bc_element_2, bc_element_3, bc_element_4)
+        update!(element, "fixed displacement 1", 0.0)
+        update!(element, "fixed displacement 2", 0.0)
+        update!(element, "fixed displacement 3", 0.0)
+    end
+    # Set top side bcs
+    for element in (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
+        for (t,f) in zip(loading.times, loading.loads)
+            update!(element, "fixed displacement 1", t => f)
+        end
+        update!(element, "fixed displacement 2", 0.0)
+        update!(element, "fixed displacement 3", 0.0)
+    end
+    return nothing
+end
+
 function FEMBase.assemble_elements!(problem::Problem{Continuum3D},
                                     assembly::Assembly,
                                     elements::Vector{Element{Hex8}},
@@ -372,7 +427,7 @@ Create a standardized material test for one element. Returns a tuple:
     (analysis, problem, element, ip1)
 
 """
-function get_material_analysis(material_model::Symbol)
+function get_one_element_material_analysis(material_model::Symbol)
 
     X = Dict(
         1 => [0.0, 0.0, 0.0],
@@ -400,22 +455,6 @@ function get_material_analysis(material_model::Symbol)
                    bc_element_5, bc_element_6, bc_element_7, bc_element_8]
     update!(bc_elements, "geometry", X)
 
-    for element in (bc_element_1, bc_element_2, bc_element_3, bc_element_4)
-        update!(element, "fixed displacement 3", 0.0)
-    end
-
-    update!(bc_element_1, "fixed displacement 1", 0.0)
-    update!(bc_element_1, "fixed displacement 2", 0.0)
-    update!(bc_element_2, "fixed displacement 2", 0.0)
-    update!(bc_element_4, "fixed displacement 1", 0.0)
-
-    update!(bc_element_5, "fixed displacement 1", 0.0)
-    update!(bc_element_5, "fixed displacement 2", 0.0)
-    update!(bc_element_6, "fixed displacement 2", 0.0)
-    update!(bc_element_8, "fixed displacement 1", 0.0)
-
-    top_bc_elements = (bc_element_5, bc_element_6, bc_element_7, bc_element_8)
-
     problem = Problem(Continuum3D, "1 element problem", 3)
     problem.properties.material_model = material_model
     add_elements!(problem, elements, bc_elements)
@@ -423,5 +462,5 @@ function get_material_analysis(material_model::Symbol)
     add_problems!(analysis, problem)
 
     ip = first(get_integration_points(element))
-    return analysis, problem, element, top_bc_elements, ip
+    return analysis, problem, element, bc_elements, ip
 end
