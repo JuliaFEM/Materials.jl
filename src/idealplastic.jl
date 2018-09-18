@@ -104,7 +104,7 @@ function integrate_material!(material::Material{IdealPlastic})
 
 end
 
-function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
+function material_postprocess_increment!(material::Material{IdealPlastic})
     props = material.properties
     # material_preprocess_iteration!(material, element, ip, time)
     # integrate_material!(material) # one more time!
@@ -112,6 +112,11 @@ function material_postprocess_increment!(material::Material{IdealPlastic}, eleme
     material.strain += material.dstrain
     props.plastic_strain += props.dplastic_strain
     props.plastic_multiplier += props.dplastic_multiplier
+    return nothing
+end
+
+function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
+    material_postprocess_increment!(material)
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     return nothing

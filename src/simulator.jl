@@ -35,7 +35,7 @@ function run!(simulator)
         material.dstrain = dstrain
         material.dtime = dt
         integrate_material!(material)
-        postprocess_analysis!(material)
+        material_postprocess_increment!(material)
         push!(simulator.stresses, copy(material.stress))
         strain_n = strain
         t_n = t
