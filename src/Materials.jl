@@ -3,7 +3,7 @@
 
 module Materials
 
-using FEMBase, LinearAlgebra, ForwardDiff, Tensors, SparseArrays
+using FEMBase, LinearAlgebra, ForwardDiff, Tensors, SparseArrays, NLsolve
 
 abstract type AbstractMaterial end
 

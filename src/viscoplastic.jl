@@ -61,6 +61,12 @@ function ViscoPlastic()
                         dplastic_multiplier)
 end
 
+""" Double contraction
+"""
+function double_contraction(x,y)
+    return sum(x.*y)
+end
+
 """ Deviatoric stress tensor
 """
 function deviatoric_stress(stress)
