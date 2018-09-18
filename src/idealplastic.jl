@@ -31,13 +31,13 @@ end
 
 material_preprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_analysis!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
-material_preprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time, dtime) = nothing
+material_preprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_increment!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 material_preprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 material_postprocess_iteration!(material::Material{IdealPlastic}, element::Element{Poi1}, ip, time) = nothing
 
-function material_preprocess_increment!(material::Material{IdealPlastic}, element, ip, time, dtime)
-    material.dtime = dtime
+function material_preprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
+    material.dtime = time - material.time
 
     # interpolate / update fields from elements to material
     mat = material.properties
@@ -99,24 +99,18 @@ function integrate_material!(material::Material{IdealPlastic})
         D[:,:] .-= (D*n*n'*D) / (n'*D*n)
         return nothing
     end
-
     return nothing
-
 end
 
-function material_postprocess_increment!(material::Material{IdealPlastic})
+function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
     props = material.properties
     # material_preprocess_iteration!(material, element, ip, time)
     # integrate_material!(material) # one more time!
     material.stress += material.dstress
     material.strain += material.dstrain
+    material.time += material.dtime
     props.plastic_strain += props.dplastic_strain
     props.plastic_multiplier += props.dplastic_multiplier
-    return nothing
-end
-
-function material_postprocess_increment!(material::Material{IdealPlastic}, element, ip, time)
-    material_postprocess_increment!(material)
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     return nothing

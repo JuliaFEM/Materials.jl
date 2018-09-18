@@ -241,7 +241,7 @@ function FEMBase.run!(analysis::Analysis{MecaMatSo})
             for element in get_elements(problem)
                 for ip in get_integration_points(element)
                     material = ip("material", time)
-                    material_preprocess_increment!(material, element, ip, time, dtime)
+                    material_preprocess_increment!(material, element, ip, time)
                 end
             end
         end

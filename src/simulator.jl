@@ -3,6 +3,8 @@
 
 using Materials
 
+dummyel = Element(Hex8, (1, 2, 3, 4, 5, 6, 7, 8))
+dummyip = first(get_integration_points(dummyel))
 mutable struct Simulator
     stresses :: Vector{Vector{Float64}}
     strains :: Vector{Vector{Float64}}
@@ -35,7 +37,7 @@ function run!(simulator)
         material.dstrain = dstrain
         material.dtime = dt
         integrate_material!(material)
-        material_postprocess_increment!(material)
+        material_postprocess_increment!(material, dummyel, dummyip, t)
         push!(simulator.stresses, copy(material.stress))
         strain_n = strain
         t_n = t

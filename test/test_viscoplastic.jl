@@ -4,10 +4,13 @@
 using FEMBase, Materials, Test, ForwardDiff
 
 @testset "Calculate plastic strain" begin
+    dummyel = Element(Hex8, (1, 2, 3, 4, 5, 6, 7, 8))
+    dummyip = first(get_integration_points(dummyel))
     # time = [...]
     # strain = [...]
     # stress = run_simulation(mat, time, strain)
     # @test isapprox(stress, stress_expected)
+
     n = 1.0
     K = 100.0
 
@@ -21,13 +24,13 @@ using FEMBase, Materials, Test, ForwardDiff
     integrate_material!(mat)
     @test isapprox(mat.stress+mat.dstress, [50.0, 0.0, 00.0, 0.0, 0.0, 0.0])
 
-    material_postprocess_increment!(mat)
+    material_postprocess_increment!(mat, dummyel, dummyip, mat.time+mat.dtime)
 
     integrate_material!(mat)
     @test isapprox(mat.stress+mat.dstress, [100.0, 0.0, 0.0, 0.0, 0.0, 0.0])
     @test isapprox(mat.properties.dplastic_multiplier, 0.0; atol=1.0e-12)
 
-    material_postprocess_increment!(mat)
+    material_postprocess_increment!(mat, dummyel, dummyip, mat.time+mat.dtime)
 
     integrate_material!(mat)
     @test mat.properties.dplastic_strain[1] > 0

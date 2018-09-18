@@ -120,8 +120,8 @@ end
 # JuliaFEM hooks #
 ##################
 
-function material_preprocess_increment!(material::Material{ViscoPlastic}, element, ip, time, dtime)
-    material.dtime = dtime
+function material_preprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
+    material.dtime = time - material.time
 
     # interpolate / update fields from elements to material
     mat = material.properties
@@ -218,19 +218,15 @@ end
 #     return nothing
 # end
 
-function material_postprocess_increment!(material::Material{ViscoPlastic})
+function material_postprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
     props = material.properties
     # material_preprocess_iteration!(material, element, ip, time)
     # integrate_material!(material) # one more time!
     material.stress += material.dstress
     material.strain += material.dstrain
+    material.time += material.dtime
     props.plastic_strain += props.dplastic_strain
     props.plastic_multiplier += props.dplastic_multiplier
-    return nothing
-end
-
-function material_postprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
-    material_postprocess_increment!(material)
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     return nothing

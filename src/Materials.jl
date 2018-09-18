@@ -35,6 +35,7 @@ mutable struct Material{M<:AbstractMaterial}
     dstress :: Vector{Float64}
     dstrain :: Vector{Float64}
     jacobian :: Matrix{Float64}
+    time :: Float64
     dtime :: Float64
     properties :: M
 end
@@ -55,9 +56,10 @@ function Material(::Type{M}, material_properties) where {M}
     dstress = zeros(6)
     dstrain = zeros(6)
     jacobian = zeros(6,6)
+    time = 0.0
     dtime = 0.0
     properties = M(material_properties...)
-    return Material(stress, strain, dstress, dstrain, jacobian, dtime, properties)
+    return Material(stress, strain, dstress, dstrain, jacobian, time, dtime, properties)
 end
 
 export AbstractMaterial, Material
@@ -66,7 +68,7 @@ function integrate_material!(material::Material{M}) where {M<:AbstractMaterial}
     error("One needs to define how to integrate material $M!")
 end
 
-material_preprocess_increment!(material::Material{<:AbstractMaterial}, element, ip, time, dtime) = nothing
+material_preprocess_increment!(material::Material{<:AbstractMaterial}, element, ip, time) = nothing
 material_postprocess_analysis!(material::Material{<:AbstractMaterial}, element, ip, time) = nothing
 material_postprocess_increment!(material::Material{<:AbstractMaterial}, element, ip, time) = nothing
 material_postprocess_iteration!(material::Material{<:AbstractMaterial}, element, ip, time) = nothing
@@ -78,6 +80,7 @@ function material_preprocess_analysis!(material::Material{M}, element, ip, time)
     if !haskey(ip, "strain")
         update!(ip, "strain", time => copy(material.strain))
     end
+    material.time = time
     return nothing
 end
 

@@ -227,9 +227,9 @@ function material_preprocess_analysis!(material::Material{Chaboche}, element, ip
     material.properties.yield_stress = ip("yield stress", 0.0)
 end
 
-function material_preprocess_increment!(material::Material{Chaboche}, element, ip, time, dtime)
+function material_preprocess_increment!(material::Material{Chaboche}, element, ip, time)
     mat = material.properties
-    material.dtime = dtime
+    material.dtime = time - material.time
     mat.youngs_modulus = element("youngs modulus", ip, time)
     mat.poissons_ratio = element("poissons ratio", ip, time)
     mat.K_n = element("K_n", ip, time)
@@ -240,26 +240,21 @@ function material_preprocess_increment!(material::Material{Chaboche}, element, i
     mat.D_2 = element("D_2", ip, time)
     mat.Q = element("Q", ip, time)
     mat.b = element("b", ip, time)
-
     return nothing
-end
-
-
-function material_postprocess_increment!(material::Material{Chaboche})
-    mat = material.properties
-    material.stress .+= material.dstress
-    material.strain .+= material.dstrain
-    mat.plastic_strain .+= mat.dplastic_strain
-    mat.cumulative_equivalent_plastic_strain += mat.cumulative_equivalent_plastic_strain
-    mat.backstress1 .+= mat.dbackstress1
-    mat.backstress2 .+= mat.dbackstress2
-    mat.yield_stress += mat.dyield_stress
 end
 
 function material_postprocess_increment!(material::Material{Chaboche}, element, ip, time)
     # preprocess_increment!(material, element, ip, time)
     # integrate_material!(material)
-    material_postprocess_increment!(material)
+    mat = material.properties
+    material.stress .+= material.dstress
+    material.strain .+= material.dstrain
+    material.time += material.dtime
+    mat.plastic_strain .+= mat.dplastic_strain
+    mat.cumulative_equivalent_plastic_strain += mat.cumulative_equivalent_plastic_strain
+    mat.backstress1 .+= mat.dbackstress1
+    mat.backstress2 .+= mat.dbackstress2
+    mat.yield_stress += mat.dyield_stress
     update!(ip, "stress", time => copy(material.stress))
     update!(ip, "strain", time => copy(material.strain))
     update!(ip, "plastic strain", time => copy(mat.plastic_strain))
