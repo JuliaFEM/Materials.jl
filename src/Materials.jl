@@ -110,7 +110,7 @@ export Chaboche
 
 # Material simulator to solve global system and run standard one element tests
 include("mecamatso.jl")
-export get_material_analysis
+export get_one_element_material_analysis, AxialStrainLoading, ShearStrainLoading, update_bc_elements!
 
 include("viscoplastic.jl")
 export ViscoPlastic
