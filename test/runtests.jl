@@ -10,10 +10,19 @@ using Materials, Test
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
+    @testset "test ideal plastic pure shear" begin
+        include("test_idealplastic_shear.jl")
+    end
     @testset "test uniaxial increment" begin
         include("test_uniaxial_increment.jl")
     end
-    @testset "test chaboche shear" begin
+    @testset "test chaboche pure shear" begin
         include("test_chaboche_shear.jl")
+    end
+    @testset "test chaboche uniaxial stress" begin
+        include("test_chaboche.jl")
+    end
+    @testset "test viscoplastic material model" begin
+        include("test_viscoplastic.jl")
     end
 end
