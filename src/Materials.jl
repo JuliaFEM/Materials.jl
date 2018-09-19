@@ -79,4 +79,7 @@ export Chaboche
 include("viscoplastic.jl")
 export ViscoPlastic
 
+include("uniaxial_increment.jl")
+export uniaxial_increment!
+
 end
