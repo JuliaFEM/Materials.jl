@@ -19,12 +19,6 @@ using FEMBase, Materials, Test
     @testset "test chaboche material model with shear strain" begin
         include("test_chaboche_shear.jl")
     end
-    @testset "test simulator" begin
-        include("test_simulator.jl")
-    end
-    @testset "test mechanical material solver" begin
-        include("test_mecamatso.jl")
-    end
     @testset "test viscoplastic" begin
         include("test_viscoplastic.jl")
     end

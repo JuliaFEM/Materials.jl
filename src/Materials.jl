@@ -3,7 +3,7 @@
 
 module Materials
 
-using LinearAlgebra, ForwardDiff, Tensors, SparseArrays, NLsolve
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve
 
 abstract type AbstractMaterial end
 

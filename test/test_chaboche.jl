@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Materials, FEMMaterials, Test
+using FEMMaterials, Test
 using DelimitedFiles
 
 
@@ -38,9 +38,9 @@ mat.properties.b = 0.1
 
 mat.stress = zeros(6)
 sim = Simulator(mat)
-MaterialSimulators.initialize!(sim, strains, ts)
+FEMMaterials.initialize!(sim, strains, ts)
 t0 = time()
-MaterialSimulators.run!(sim)
+FEMMaterials.run!(sim)
 t1 = time()
 @info "Test took $(t1-t0)s!"
 s33s = [s[3] for s in sim.stresses]

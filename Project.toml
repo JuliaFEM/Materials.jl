@@ -1,0 +1,16 @@
+authors = ["ahojukka5 <ahojukka5@gmail.com>", "jvaara <joona_vaara@hotmail.com>"]
+name = "Materials"
+uuid = "35fa313e-aa48-52ea-bc82-ddb91c7db87b"
+version = "0.1.0"
+
+[deps]
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+Tensors = "48a634ad-e948-5137-8d70-aa71f2a747f4"
+NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
+
+[extras]
+FEMMaterials = "0c6c1f6c-65b6-54d6-9cff-6b64003af638"
+
+[targets]
+test = ["FEMMaterials"]

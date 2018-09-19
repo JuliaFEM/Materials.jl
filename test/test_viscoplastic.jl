@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using FEMBase, FEMMaterials, Materials, Test, ForwardDiff
+using FEMMaterials, Test, ForwardDiff
 
 
 @testset "Calculate plastic strain" begin
