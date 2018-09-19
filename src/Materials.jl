@@ -105,6 +105,9 @@ export IdealPlastic
 # Material point simulator to study material behavior in single integration point
 include("simulator.jl")
 
+include("simulator2.jl")
+export uniaxial_increment!
+
 include("chaboche.jl")
 export Chaboche
 

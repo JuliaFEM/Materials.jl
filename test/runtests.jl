@@ -25,6 +25,9 @@ using FEMBase, Materials, Test
     @testset "test mechanical material solver" begin
         include("test_mecamatso.jl")
     end
+    @testset "test simulator2" begin
+        include("test_simulator2.jl")
+    end
     @testset "test viscoplastic" begin
         include("test_viscoplastic.jl")
     end
