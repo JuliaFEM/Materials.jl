@@ -1,11 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Materials, Test
-include("FEMMaterials.jl")
-using .FEMMaterials
-include("MaterialSimulators.jl")
-using .MaterialSimulators
+using Materials, FEMMaterials, Test
 
 
 m1 = 1.0e-3*[-0.3, -0.3, 1.0, 0.0, 0.0, 0.0]

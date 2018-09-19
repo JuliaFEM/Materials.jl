@@ -1,12 +1,8 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Materials, Test
+using Materials, FEMMaterials, Test
 using DelimitedFiles
-include("FEMMaterials.jl")
-using .FEMMaterials
-include("MaterialSimulators.jl")
-using .MaterialSimulators
 
 
 path = joinpath("test_chaboche", "unitelement_results.rpt")
