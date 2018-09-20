@@ -115,6 +115,7 @@ function integrate_material!(material::Material{Chaboche})
         F = similar(x0)
         res = nlsolve(g!, x0)
         x = res.zero
+        res.f_converged || error("Nonlinear system of equations did not converge!")
         stress = x[1:6]
         R = x[7]
         X_1 = x[8:13]

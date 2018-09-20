@@ -8,8 +8,8 @@ props = mat.properties
 props.youngs_modulus = 200.0e3
 props.poissons_ratio = 0.3
 props.yield_stress = 100.0
-props.K_n = 10.0
-props.n_n = 20.0
+props.K_n = 100.0
+props.n_n = 3.0
 props.C_1 = 0.0
 props.D_1 = 100.0
 props.C_2 = 0.0
@@ -37,7 +37,9 @@ push!(times, times[end]+dt)
 push!(loads, loads[end] - ea*dt)
  # Continue and pass yield criterion
 push!(times, times[end]+dt)
-push!(loads, loads[end] - 2*ea*dt)
+push!(loads, loads[end] - ea*dt)
+push!(times, times[end]+dt)
+push!(loads, loads[end] - ea*dt)
 
 eeqs = [mat.properties.cumulative_equivalent_plastic_strain]
 stresses = [copy(mat.stress)]
@@ -58,6 +60,7 @@ for i=2:length(times)
     mat.properties.cumulative_equivalent_plastic_strain += mat.properties.dcumulative_equivalent_plastic_strain
     push!(stresses, copy(mat.stress))
     push!(eeqs, mat.properties.cumulative_equivalent_plastic_strain)
+    @info "time = $(mat.time), stress = $(mat.stress), cumeq = $(mat.properties.cumulative_equivalent_plastic_strain))"
 end
 
 for i in 1:length(times)
@@ -66,6 +69,6 @@ end
 s31 = [s[6] for s in stresses]
 
 @test isapprox(s31[2], syield/sqrt(3.0))
-@test isapprox(s31[3]*sqrt(3.0), syield + 10.0*((eeqs[3]-eeqs[2])/dt)^(1.0/20.0); rtol=1e-2)
+@test isapprox(s31[3]*sqrt(3.0), syield + 100.0*((eeqs[3]-eeqs[2])/dt)^(1.0/3.0); rtol=1e-2)
 @test isapprox(s31[4], s31[3]-G*ea*dt)
-@test isapprox(s31[5]*sqrt(3.0), -(syield + 10.0*((eeqs[5]-eeqs[4])/dt)^(1.0/20.0)); rtol=1e-2)
+@test isapprox(s31[6]*sqrt(3.0), -(syield + 100.0*((eeqs[6]-eeqs[5])/dt)^(1.0/3.0)); rtol=1e-2)
