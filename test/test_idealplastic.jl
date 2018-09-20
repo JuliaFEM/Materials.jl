@@ -1,8 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using FEMBase, Materials, Test, ForwardDiff
-
+using Test
 # time = [...]
 # strain = [...]
 # stress = run_simulation(mat, time, strain)

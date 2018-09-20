@@ -2,7 +2,6 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using Materials, Test
-using Materials: Simulator
 using DelimitedFiles
 
 path = joinpath("test_chaboche", "unitelement_results.rpt")
@@ -37,11 +36,21 @@ mat.properties.Q = 50.0
 mat.properties.b = 0.1
 
 mat.stress = zeros(6)
-sim = Simulator(mat)
-Materials.initialize!(sim, strains, ts)
-t0 = time()
-Materials.run!(sim)
-t1 = time()
-@info "Test took $(t1-t0)s!"
-s33s = [s[3] for s in sim.stresses]
+s33s = [0.0]
+for i=2:length(ts)
+    dtime = ts[i]-ts[i-1]
+    dstrain = strains[i]-strains[i-1]
+    mat.dtime = dtime
+    mat.dstrain = dstrain
+    integrate_material!(mat)
+    mat.time += mat.dtime
+    mat.strain .+= mat.dstrain
+    mat.stress .+= mat.dstress
+    mat.properties.plastic_strain .+= mat.properties.dplastic_strain
+    mat.properties.backstress1 .+= mat.properties.dbackstress1
+    mat.properties.backstress2 .+= mat.properties.dbackstress2
+    mat.properties.R += mat.properties.dR
+    mat.properties.cumulative_equivalent_plastic_strain += mat.properties.dcumulative_equivalent_plastic_strain
+    push!(s33s, copy(mat.stress[3]))
+end
 @test isapprox(s33s, s33_; rtol=0.001)

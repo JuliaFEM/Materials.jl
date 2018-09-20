@@ -122,35 +122,6 @@ function dNortondStress(stress, params, f)
             2*sol_mat[1,2], 2*sol_mat[2,3], 2*sol_mat[1,3]]
 end
 
-##################
-# JuliaFEM hooks #
-##################
-
-function material_preprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
-    material.dtime = time - material.time
-
-    # interpolate / update fields from elements to material
-    mat = material.properties
-    mat.youngs_modulus = element("youngs modulus", ip, time)
-    mat.poissons_ratio = element("poissons ratio", ip, time)
-
-    if haskey(element, "yield stress")
-        mat.yield_stress = element("yield stress", ip, time)
-    else
-        mat.yield_stress = Inf
-    end
-
-    if haskey(element, "plastic strain")
-        plastic_strain = element("plastic strain", ip, time)
-    end
-
-    # reset all incremental variables ready for next iteration
-    fill!(mat.dplastic_strain, 0.0)
-    mat.dplastic_multiplier = 0.0
-
-    return nothing
-end
-
 function find_root(f, df, x; max_iter=50, norm_acc=1e-9)
     converged = false
     for i=1:max_iter
@@ -216,24 +187,4 @@ function integrate_material!(material::Material{ViscoPlastic})
 
     return nothing
 
-end
-
-
-# """ Material postprocess step after increment finish. """
-# function postprocess_increment!(material::Material{M}, element, ip, time) where {M}
-#     return nothing
-# end
-
-function material_postprocess_increment!(material::Material{ViscoPlastic}, element, ip, time)
-    props = material.properties
-    # material_preprocess_iteration!(material, element, ip, time)
-    # integrate_material!(material) # one more time!
-    material.stress += material.dstress
-    material.strain += material.dstrain
-    material.time += material.dtime
-    props.plastic_strain += props.dplastic_strain
-    props.plastic_multiplier += props.dplastic_multiplier
-    update!(ip, "stress", time => copy(material.stress))
-    update!(ip, "strain", time => copy(material.strain))
-    return nothing
 end

@@ -1,25 +1,22 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Materials, FEMBase, Test
+using Materials, Test
 
-analysis, problem, element, bc_elements, ip = get_one_element_material_analysis(:Chaboche)
-update!(element, "youngs modulus", 200.0e3)
-update!(element, "poissons ratio", 0.3)
-update!(element, "yield stress", 100.0)
-update!(element, "K_n", 10.0)
-update!(element, "n_n", 20.0)
-update!(element, "C_1", 0.0)
-update!(element, "D_1", 100.0)
-update!(element, "C_2", 0.0)
-update!(element, "D_2", 1000.0)
-update!(element, "Q", 0.0)
-update!(element, "b", 0.1)
+mat = Material(Chaboche, tuple())
+props = mat.properties
+props.youngs_modulus = 200.0e3
+props.poissons_ratio = 0.3
+props.yield_stress = 100.0
+props.K_n = 100.0
+props.n_n = 3.0
+props.C_1 = 0.0
+props.D_1 = 100.0
+props.C_2 = 0.0
+props.D_2 = 1000.0
+props.Q = 0.0
+props.b = 0.1
 
-function von_mises_stress(stress::Vector{Float64})
-    return sqrt(0.5*((stress[1]-stress[2])^2 + (stress[2]-stress[3])^2 +
-        (stress[3]-stress[1])^2 + 6*(stress[4]^2+stress[5]^2+stress[6]^2)))
-end
 times = [0.0]
 loads = [0.0]
 dt = 0.5
@@ -40,21 +37,38 @@ push!(times, times[end]+dt)
 push!(loads, loads[end] - ea*dt)
  # Continue and pass yield criterion
 push!(times, times[end]+dt)
-push!(loads, loads[end] - 2*ea*dt)
-loading = ShearStrainLoading(times, loads)
-update_bc_elements!(bc_elements, loading)
+push!(loads, loads[end] - ea*dt)
+push!(times, times[end]+dt)
+push!(loads, loads[end] - ea*dt)
 
-analysis.properties.t1 = maximum(times)
-run!(analysis)
-stresses = zeros(length(times), 6)
-for (i,t) in zip(1:length(times), times)
-    stresses[i,:] = ip("stress", t)
-    @test isapprox(stresses[i,1:5], zeros(5); atol=1e-6)
+eeqs = [mat.properties.cumulative_equivalent_plastic_strain]
+stresses = [copy(mat.stress)]
+for i=2:length(times)
+    dtime = times[i]-times[i-1]
+    dstrain31 = loads[i]-loads[i-1]
+    dstrain = [0.0, 0.0, 0.0, 0.0, 0.0, dstrain31]
+    mat.dtime = dtime
+    mat.dstrain = dstrain
+    integrate_material!(mat)
+    mat.time += mat.dtime
+    mat.strain .+= mat.dstrain
+    mat.stress .+= mat.dstress
+    mat.properties.plastic_strain .+= mat.properties.dplastic_strain
+    mat.properties.backstress1 .+= mat.properties.dbackstress1
+    mat.properties.backstress2 .+= mat.properties.dbackstress2
+    mat.properties.R += mat.properties.dR
+    mat.properties.cumulative_equivalent_plastic_strain += mat.properties.dcumulative_equivalent_plastic_strain
+    push!(stresses, copy(mat.stress))
+    push!(eeqs, mat.properties.cumulative_equivalent_plastic_strain)
+    @info "time = $(mat.time), stress = $(mat.stress), cumeq = $(mat.properties.cumulative_equivalent_plastic_strain))"
 end
-s31 = stresses[:,6]
-eeqs = [ip("cumulative equivalent plastic strain", t) for t in times]
+
+for i in 1:length(times)
+    @test isapprox(stresses[i][1:5], zeros(5); atol=1e-6)
+end
+s31 = [s[6] for s in stresses]
 
 @test isapprox(s31[2], syield/sqrt(3.0))
-@test isapprox(s31[3]*sqrt(3.0), syield + 10.0*((eeqs[3]-eeqs[2])/dt)^(1.0/20.0); rtol=1e-2)
+@test isapprox(s31[3]*sqrt(3.0), syield + 100.0*((eeqs[3]-eeqs[2])/dt)^(1.0/3.0); rtol=1e-2)
 @test isapprox(s31[4], s31[3]-G*ea*dt)
-@test isapprox(s31[5]*sqrt(3.0), -(syield + 10.0*((eeqs[5]-eeqs[4])/dt)^(1.0/20.0)); rtol=1e-2)
+@test isapprox(s31[6]*sqrt(3.0), -(syield + 100.0*((eeqs[6]-eeqs[5])/dt)^(1.0/3.0)); rtol=1e-2)

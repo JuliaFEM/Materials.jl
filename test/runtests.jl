@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using FEMBase, Materials, Test
+using Materials, Test
 
 @testset "Test Materials.jl" begin
     @testset "test abstract material" begin
@@ -10,22 +10,19 @@ using FEMBase, Materials, Test
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
-    @testset "test ideal plastic material model with shear strain" begin
+    @testset "test ideal plastic pure shear" begin
         include("test_idealplastic_shear.jl")
     end
-    @testset "test chaboche material model" begin
-        include("test_chaboche.jl")
+    @testset "test uniaxial increment" begin
+        include("test_uniaxial_increment.jl")
     end
-    @testset "test chaboche material model with shear strain" begin
+    @testset "test chaboche pure shear" begin
         include("test_chaboche_shear.jl")
     end
-    @testset "test simulator" begin
-        include("test_simulator.jl")
+    @testset "test chaboche uniaxial stress" begin
+        include("test_chaboche.jl")
     end
-    @testset "test mechanical material solver" begin
-        include("test_mecamatso.jl")
-    end
-    @testset "test viscoplastic" begin
+    @testset "test viscoplastic material model" begin
         include("test_viscoplastic.jl")
     end
 end
