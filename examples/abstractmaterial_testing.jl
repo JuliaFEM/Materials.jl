@@ -9,6 +9,7 @@ end
 
 reset!(v::Variable) = (v.dvalue = zero(v.value))
 update!(v::Variable) = (v.value += v.dvalue; reset!(v))
+update!(v::Variable{<:Array}) = v.value .= v.value .+ v.dvalue
 
 using Tensors
 a = 1.0
@@ -37,7 +38,7 @@ update!(varc)
 @info "After update!: $varc"
 
 using BenchmarkTools
-N = 1000000
+N = 1000
 function bench_float64()
     # Random walk test"
     var = Variable(1.0)
@@ -60,7 +61,7 @@ function bench_tensor()
     # Random walk test
     var = Variable(Tensor{2, 3}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]))
     for i in 1:N
-        var.dvalue += Tensor{2,3}(randn(9))
+        var.dvalue += randn(Tensor{2,3})
         update!(var)
     end
 end
