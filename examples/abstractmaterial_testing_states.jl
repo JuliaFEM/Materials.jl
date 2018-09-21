@@ -25,8 +25,8 @@ function bench_state(N)
    return state
 end
 
-println("Benchmark State{SymmetricTensor{2,3,Float64}}")
-@btime bench_state(N)
+# println("Benchmark State{SymmetricTensor{2,3,Float64}}")
+# @btime bench_state(N)
 
 struct AnotherState <: AbstractMaterialState
    stress::SymmetricTensor{2,3,Float64,6}

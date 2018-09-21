@@ -74,14 +74,14 @@ function bench_symtensor()
     end
 end
 
-println("Benchmark Variable{Float64}")
-@btime bench_float64()
-println("Benchmark Variable{Array{Float64,1}}")
-@btime bench_array()
-println("Benchmark Variable{Tensor{2,3,Float64,9}}")
-@btime bench_tensor()
-println("Benchmark Variable{SymmetricTensor{2,3,Float64,6}}")
-@btime bench_symtensor()
+# println("Benchmark Variable{Float64}")
+# @btime bench_float64()
+# println("Benchmark Variable{Array{Float64,1}}")
+# @btime bench_array()
+# println("Benchmark Variable{Tensor{2,3,Float64,9}}")
+# @btime bench_tensor()
+# println("Benchmark Variable{SymmetricTensor{2,3,Float64,6}}")
+# @btime bench_symtensor()
 
 abstract type AbstractVariableState end
 
@@ -116,11 +116,11 @@ function bench_chaboche_style_variablestate()
     state = VariableState(stress, strain, backstress1,
                         backstress2, plastic_strain, cumeq, R)
     for i in 1:N
-        state.stress.dvalue = SymmetricTensor{2,3}(randn(6))
-        state.strain.dvalue = SymmetricTensor{2,3}(randn(6))
-        state.backstress1.dvalue = SymmetricTensor{2,3}(randn(6))
-        state.backstress2.dvalue = SymmetricTensor{2,3}(randn(6))
-        state.plastic_strain.dvalue = SymmetricTensor{2,3}(randn(6))
+        state.stress.dvalue = randn(SymmetricTensor{2,3})
+        state.strain.dvalue = randn(SymmetricTensor{2,3})
+        state.backstress1.dvalue = randn(SymmetricTensor{2,3})
+        state.backstress2.dvalue = randn(SymmetricTensor{2,3})
+        state.plastic_strain.dvalue = randn(SymmetricTensor{2,3})
         state.cumeq.dvalue = norm(state.plastic_strain.dvalue)
         state.R.dvalue = randn()
         update!(state)
