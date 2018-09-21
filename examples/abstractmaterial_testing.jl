@@ -9,7 +9,7 @@ end
 
 reset!(v::Variable) = (v.dvalue = zero(v.value))
 update!(v::Variable) = (v.value += v.dvalue; reset!(v))
-update!(v::Variable{<:Array}) = v.value .= v.value .+ v.dvalue
+update!(v::Variable{<:Array}) = v.value .+= v.dvalue
 
 using Tensors
 a = 1.0
