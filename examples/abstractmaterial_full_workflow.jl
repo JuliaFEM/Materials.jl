@@ -166,11 +166,11 @@ function create_nonlinear_system_of_equations(material::Chaboche)
     @unpack strain, time = d
     dstrain = dd.strain
     dtime = dd.time
-    @unpack stress, X1, X2, plastic_strain, cumeq, R, jacobian = v
+    @unpack stress, X1, X2, plastic_strain, cumeq, R = v
 
-    jacobian = isotropic_elasticity_tensor(lambda, mu)
 
     function g!(F, x::Vector{T}) where {T} # System of non-linear equations
+        jacobian = isotropic_elasticity_tensor(lambda, mu)
         stress_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
         R_ = x[7]
         X1_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[8:13])
