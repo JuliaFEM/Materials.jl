@@ -12,7 +12,7 @@ end
 
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
     time :: Float64 = 0.0
-    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
+    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
 end
 
 @with_kw struct ChabocheParameterState <: AbstractMaterialState
@@ -30,13 +30,13 @@ end
 end
 
 @with_kw struct ChabocheVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
-    X1 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
-    X2 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
-    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
+    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    X1 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    X2 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
     cumeq :: Float64 = 0.0
     R :: Float64 = 0.0
-    jacobian :: SymmetricTensor{4,3,Float64,36} = zero(SymmetricTensor{4,3,Float64,36})
+    jacobian :: SymmetricTensor{4,3,Float64,36} = zero(SymmetricTensor{4,3})
 end
 
 @with_kw mutable struct Chaboche <: AbstractMaterial
@@ -50,7 +50,7 @@ end
 
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
     time :: Float64 = 0.0
-    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
+    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
 end
 
 @with_kw struct IdealPlasticParameterState <: AbstractMaterialState
@@ -60,8 +60,8 @@ end
 end
 
 @with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
-    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3,Float64,6})
+    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
     cumeq :: Float64 = 0.0
 end
 
@@ -129,10 +129,10 @@ function integrate_material!(material::Chaboche)
         res = nlsolve(g!, x0; autodiff = :forward)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
-        stress = fromvoigt(SymmetricTensor{2,3,Float64}, x[1:6])
+        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
         R = x[7]
-        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, x[8:13])
-        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, x[14:19])
+        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
+        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
         seff = stress - X1 - X2
         seff_dev = dev(seff)
         f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
@@ -171,10 +171,10 @@ function create_nonlinear_system_of_equations(material::Chaboche)
     jacobian = isotropic_elasticity_tensor(lambda, mu)
 
     function g!(F, x::Vector{T}) where {T} # System of non-linear equations
-        stress_ = fromvoigt(SymmetricTensor{2,3,T}, x[1:6])
+        stress_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
         R_ = x[7]
-        X1_ = fromvoigt(SymmetricTensor{2,3,T}, x[8:13])
-        X2_ = fromvoigt(SymmetricTensor{2,3,T}, x[14:19])
+        X1_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[8:13])
+        X2_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[14:19])
 
         seff = stress_ - X1_ - X2_
         seff_dev = dev(seff)
