@@ -1,7 +1,6 @@
 using Tensors
 using Parameters
 using NLsolve
-using Memoize
 
 abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
@@ -96,7 +95,7 @@ end
 mat = Chaboche()
 mat2 = IdealPlastic()
 
-@memoize function isotropic_elasticity_tensor(lambda, mu)
+function isotropic_elasticity_tensor(lambda, mu)
     delta(i,j) = i==j ? 1.0 : 0.0
     g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
     jacobian = SymmetricTensor{4, 3, Float64}(g)
@@ -127,7 +126,7 @@ function integrate_material!(material::Chaboche)
         g! = create_nonlinear_system_of_equations(material)
         x0 = [tovoigt(stress); R; tovoigt(X1); tovoigt(X2)]
         F = similar(x0)
-        res = nlsolve(g!, x0)
+        res = nlsolve(g!, x0; autodiff = :forward)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
         stress = fromvoigt(SymmetricTensor{2,3,Float64}, x[1:6])
@@ -171,11 +170,11 @@ function create_nonlinear_system_of_equations(material::Chaboche)
 
     jacobian = isotropic_elasticity_tensor(lambda, mu)
 
-    function g!(F, x) # System of non-linear equations
-        stress_ = fromvoigt(SymmetricTensor{2,3,Float64}, x[1:6])
+    function g!(F, x::Vector{T}) where {T} # System of non-linear equations
+        stress_ = fromvoigt(SymmetricTensor{2,3,T}, x[1:6])
         R_ = x[7]
-        X1_ = fromvoigt(SymmetricTensor{2,3,Float64}, x[8:13])
-        X2_ = fromvoigt(SymmetricTensor{2,3,Float64}, x[14:19])
+        X1_ = fromvoigt(SymmetricTensor{2,3,T}, x[8:13])
+        X2_ = fromvoigt(SymmetricTensor{2,3,T}, x[14:19])
 
         seff = stress_ - X1_ - X2_
         seff_dev = dev(seff)
@@ -241,7 +240,7 @@ function simple_integration_test()
 end
 
 using DelimitedFiles, Test
-path = joinpath("one_elem_disp_chaboche", "unitelement_results.rpt")
+path = joinpath(@__DIR__, "one_elem_disp_chaboche", "unitelement_results.rpt")
 data = readdlm(path, Float64; skipstart=4)
 ts = data[:,1]
 s11_ = data[:,2]
