@@ -284,5 +284,38 @@ function test_chaboche()
 end
 
 # test_chaboche()
-using BenchmarkTools
-@btime test_chaboche()
+# using BenchmarkTools
+# @btime test_chaboche()
+
+function simple_integration_test_fd_tangent()
+    parameters = ChabocheParameterState(E = 200.0e3,
+                                        nu = 0.3,
+                                        R0 = 100.0,
+                                        Kn = 100.0,
+                                        nn = 10.0,
+                                        C1 = 10000.0,
+                                        D1 = 100.0,
+                                        C2 = 50000.0,
+                                        D2 = 1000.0,
+                                        Q = 50.0,
+                                        b = 0.1)
+
+    dstrain_dtime = fromvoigt(SymmetricTensor{2,3,Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
+    ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
+    chabmat = Chaboche(parameters = parameters, ddrivers = ddrivers)
+
+    function get_stress(dstrain)
+        chabmat.ddrivers.strain = dstrain
+        integrate_material!(chabmat)
+        return chabmat.variables_new.stress
+    end
+    stress = get_stress(0.25*dstrain_dtime)
+    @info "stress = $stress"
+
+    D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
+    D_voigt = tovoigt(D)
+    @info "D_mat = $(tovoigt(chabmat.variables_new.jacobian))"
+    @info "D = $(D_voigt)"
+end
+
+simple_integration_test_fd_tangent()
