@@ -11,8 +11,8 @@ abstract type AbstractMaterialState end
 end
 
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
-    time :: Float64 = 0.0
-    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    time :: Float64 = zero(Float64)
+    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
 end
 
 @with_kw struct ChabocheParameterState <: AbstractMaterialState
@@ -30,13 +30,13 @@ end
 end
 
 @with_kw struct ChabocheVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    X1 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    X2 :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    cumeq :: Float64 = 0.0
-    R :: Float64 = 0.0
-    jacobian :: SymmetricTensor{4,3,Float64,36} = zero(SymmetricTensor{4,3})
+    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    X1 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    X2 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    cumeq :: Float64 = zero(Float64)
+    R :: Float64 = zero(Float64)
+    jacobian :: SymmetricTensor{4,3} = zero(SymmetricTensor{4,3,Float64})
 end
 
 @with_kw mutable struct Chaboche <: AbstractMaterial
@@ -49,20 +49,20 @@ end
 end
 
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
-    time :: Float64 = 0.0
-    strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
+    time :: Float64 = zero(Float64)
+    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
 end
 
 @with_kw struct IdealPlasticParameterState <: AbstractMaterialState
-    youngs_modulus :: Float64 = 0.0
-    poissons_ratio :: Float64 = 0.0
-    yield_stress :: Float64 = 0.0
+    youngs_modulus :: Float64 = zero(Float64)
+    poissons_ratio :: Float64 = zero(Float64)
+    yield_stress :: Float64 = zero(Float64)
 end
 
 @with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    plastic_strain :: SymmetricTensor{2,3,Float64,6} = zero(SymmetricTensor{2,3})
-    cumeq :: Float64 = 0.0
+    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    cumeq :: Float64 = zero(Float64)
 end
 
 function update!(material::M) where {M <: AbstractMaterial}
@@ -91,6 +91,7 @@ end
     parameters :: IdealPlasticParameterState = IdealPlasticParameterState()
     dparameters :: IdealPlasticParameterState = IdealPlasticParameterState()
 end
+
 
 mat = Chaboche()
 mat2 = IdealPlastic()
@@ -168,7 +169,6 @@ function create_nonlinear_system_of_equations(material::Chaboche)
     dtime = dd.time
     @unpack stress, X1, X2, plastic_strain, cumeq, R = v
 
-
     function g!(F, x::Vector{T}) where {T} # System of non-linear equations
         jacobian = isotropic_elasticity_tensor(lambda, mu)
         stress_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
@@ -184,25 +184,18 @@ function create_nonlinear_system_of_equations(material::Chaboche)
         dp = dotp*dtime
         n = 1.5*seff_dev/norm(seff_dev)
         dstrain_plastic = dp*n
-        # f1 = stress - stress_ + dcontract(D, dstrain - dstrain_plastic)
         tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain - dstrain_plastic))
-        # f2 = R - R_ + b*(Q-R_)*dp
         F[7] = R - R_ + b*(Q-R_)*dp
         if isapprox(C1, 0.0)
-            # f3 = X1 - X1_
             tovoigt!(view(F,8:13),X1 - X1_)
         else
-            # f3 = X1 - X1_ + 2.0/3.0*C1*dp*(n - 1.5*D1/C1*X1_)
             tovoigt!(view(F,8:13), X1 - X1_ + 2.0/3.0*C1*dp*(n - 1.5*D1/C1*X1_))
         end
         if isapprox(C2, 0.0)
-            # f4 = X2 - X2_
             tovoigt!(view(F,14:19), X2 - X2_)
         else
-            # f4 = X2 - X2_ + 2.0/3.0*C2*dp*(n - 1.5*D2/C2*X2_)
             tovoigt!(view(F, 14:19), X2 - X2_ + 2.0/3.0*C2*dp*(n - 1.5*D2/C2*X2_))
         end
-        # F[:] = [tovoigt(f1); f2; tovoigt(f3); tovoigt(f4)]
     end
     return g!
 end
