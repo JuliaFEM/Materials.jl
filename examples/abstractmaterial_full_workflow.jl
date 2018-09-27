@@ -69,6 +69,13 @@ function update!(material::M) where {M <: AbstractMaterial}
     material.drivers += material.ddrivers
     material.parameters += material.dparameters
     material.variables = material.variables_new
+    # material.ddrivers = typeof(material.ddrivers)()
+    # material.dparameters = typeof(material.dparameters)()
+    # material.variables_new = typeof(material.variables_new)()
+    reset!(material)
+end
+
+function reset!(material::M) where {M <: AbstractMaterial}
     material.ddrivers = typeof(material.ddrivers)()
     material.dparameters = typeof(material.dparameters)()
     material.variables_new = typeof(material.variables_new)()
@@ -302,13 +309,61 @@ function simple_integration_test_fd_tangent()
         integrate_material!(chabmat)
         return chabmat.variables_new.stress
     end
-    stress = get_stress(0.25*dstrain_dtime)
-    @info "stress = $stress"
+    # stress = get_stress(0.25*dstrain_dtime)
+    # @info "stress = $stress"
 
     D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
-    D_voigt = tovoigt(D)
     @info "D_mat = $(tovoigt(chabmat.variables_new.jacobian))"
-    @info "D = $(D_voigt)"
+    @info "D = $(tovoigt(D))"
+
+    chabmat.variables_new = typeof(chabmat.variables_new)()
+    chabmat.ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+    integrate_material!(chabmat)
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+
+    function get_stress(dstrain)
+        chabmat.ddrivers.strain = dstrain
+        integrate_material!(chabmat)
+        return chabmat.variables_new.stress
+    end
+    # stress = get_stress(0.25*dstrain_dtime)
+    # @info "stress = $stress"
+
+    D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
+    @info "D = $(tovoigt(D))"
+    chabmat.variables_new = typeof(chabmat.variables_new)()
+    chabmat.ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
+    integrate_material!(chabmat)
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+    function get_stress(dstrain)
+        ddrivers = ChabocheDriverState(time = 0.25, strain = dstrain)
+        chabmat.ddrivers.strain = dstrain
+        integrate_material!(chabmat)
+        return chabmat.variables_new.stress
+    end
+    # stress = get_stress(0.25*dstrain_dtime)
+    # @info "stress = $stress"
+
+    D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
+    @info "D = $(tovoigt(D))"
+    chabmat.variables_new = typeof(chabmat.variables_new)()
+    chabmat.ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
+    integrate_material!(chabmat)
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+    function get_stress(dstrain)
+        chabmat.ddrivers.strain = dstrain
+        integrate_material!(chabmat)
+        return chabmat.variables_new.stress
+    end
+    # stress = get_stress(0.25*dstrain_dtime)
+    # @info "stress = $stress"
+
+    D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
+    @info "D = $(tovoigt(D))"
 end
 
 simple_integration_test_fd_tangent()
