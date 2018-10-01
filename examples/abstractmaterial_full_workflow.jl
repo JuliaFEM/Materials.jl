@@ -1,6 +1,7 @@
 using Tensors
 using Parameters
 using NLsolve
+using ForwardDiff
 
 abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
@@ -137,6 +138,7 @@ function integrate_material!(material::Chaboche)
         res = nlsolve(g!, x0; autodiff = :forward)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
+
         stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
         R = x[7]
         X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
@@ -150,7 +152,16 @@ function integrate_material!(material::Chaboche)
 
         plastic_strain += dp*n
         cumeq += dp
-        jacobian -= otimes(dcontract(jacobian,n), dcontract(n, jacobian))/dcontract(dcontract(n,jacobian),n)
+        # Compute Jacobian
+        function residuals(x)
+            F = similar(x)
+            g!(F, x)
+            return F
+        end
+        drdx = ForwardDiff.jacobian(residuals, x)
+        drde = zeros((length(x),6))
+        drde[1:6, 1:6] = -tovoigt(jacobian)
+        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx\drde)[1:6, 1:6])
     end
     variables_new = ChabocheVariableState(stress = stress,
                                           X1 = X1,
@@ -339,7 +350,6 @@ function simple_integration_test_fd_tangent()
     update!(chabmat)
     @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
     function get_stress(dstrain)
-        ddrivers = ChabocheDriverState(time = 0.25, strain = dstrain)
         chabmat.ddrivers.strain = dstrain
         integrate_material!(chabmat)
         return chabmat.variables_new.stress
@@ -366,4 +376,91 @@ function simple_integration_test_fd_tangent()
     @info "D = $(tovoigt(D))"
 end
 
-simple_integration_test_fd_tangent()
+# simple_integration_test_fd_tangent()
+
+function simple_integration_test_fd_tangent2()
+    parameters = ChabocheParameterState(E = 200.0e3,
+                                        nu = 0.3,
+                                        R0 = 100.0,
+                                        Kn = 100.0,
+                                        nn = 10.0,
+                                        C1 = 10000.0,
+                                        D1 = 100.0,
+                                        C2 = 50000.0,
+                                        D2 = 1000.0,
+                                        Q = 50.0,
+                                        b = 0.1)
+
+    dstrain_dtime = fromvoigt(SymmetricTensor{2,3,Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
+    ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
+    chabmat = Chaboche(parameters = parameters, ddrivers = ddrivers)
+    integrate_material!(chabmat)
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+
+    chabmat.ddrivers = ddrivers
+    integrate_material!(chabmat)
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+
+    chabmat.ddrivers = ddrivers
+    integrate_material!(chabmat)
+    g! = create_nonlinear_system_of_equations(chabmat)
+    function residuals(x)
+        F = similar(x)
+        g!(F, x)
+        return F
+    end
+
+    x0 = [tovoigt(chabmat.variables_new.stress); chabmat.variables_new.R; tovoigt(chabmat.variables_new.X1); tovoigt(chabmat.variables_new.X2)]
+    drdx = ForwardDiff.jacobian(residuals, x0)
+    @info "size(drdx) = $(size(drdx))"
+    @info "drdx = $drdx"
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = parameters
+    mu = E/(2.0*(1.0+nu))
+    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    jacobian = isotropic_elasticity_tensor(lambda, mu)
+    drde = zeros((19,6))
+    drde[1:6, 1:6] = -tovoigt(jacobian)
+    @info "drde = $drde"
+    @info "size(drde) = $(size(drde))"
+    jacobian2 = (drdx\drde)[1:6, 1:6]
+    @info "jacobian = $(tovoigt(jacobian))"
+    @info "jacobian2 = $jacobian2"
+    jacobian3 = (drdx[1:6, 1:6] +  drdx[1:6,7:end]*(drdx[7:end,7:end]\-drdx[7:end, 1:6]))\drde[1:6, 1:6]
+    @info "jacobian3 = $jacobian3"
+    @info "jacobian4 = $(tovoigt(chabmat.variables_new.jacobian))"
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+
+    chabmat.ddrivers = ddrivers
+    integrate_material!(chabmat)
+    g! = create_nonlinear_system_of_equations(chabmat)
+    function residuals(x)
+        F = similar(x)
+        g!(F, x)
+        return F
+    end
+
+    x0 = [tovoigt(chabmat.variables_new.stress); chabmat.variables_new.R; tovoigt(chabmat.variables_new.X1); tovoigt(chabmat.variables_new.X2)]
+    drdx = ForwardDiff.jacobian(residuals, x0)
+    @info "size(drdx) = $(size(drdx))"
+    @info "drdx = $drdx"
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = parameters
+    mu = E/(2.0*(1.0+nu))
+    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    jacobian = isotropic_elasticity_tensor(lambda, mu)
+    drde = zeros((19,6))
+    drde[1:6, 1:6] = -tovoigt(jacobian)
+    @info "drde = $drde"
+    @info "size(drde) = $(size(drde))"
+    jacobian2 = (drdx\drde)[1:6, 1:6]
+    @info "jacobian = $(tovoigt(jacobian))"
+    @info "jacobian2 = $jacobian2"
+    jacobian3 = (drdx[1:6, 1:6] +  drdx[1:6,7:end]*(drdx[7:end,7:end]\-drdx[7:end, 1:6]))\drde[1:6, 1:6]
+    @info "jacobian3 = $jacobian3"
+    @info "jacobian4 = $(tovoigt(chabmat.variables_new.jacobian))"
+    update!(chabmat)
+    @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
+end
+simple_integration_test_fd_tangent2()
