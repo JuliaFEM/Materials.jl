@@ -2,6 +2,7 @@ using Tensors
 using Parameters
 using NLsolve
 using ForwardDiff
+using Profile
 
 abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
@@ -294,7 +295,9 @@ function test_chaboche()
     # @test isapprox(s33s, s33_; rtol=0.01)
 end
 
-# test_chaboche()
+test_chaboche()
+Profile.clear_malloc_data()
+test_chaboche()
 # using BenchmarkTools
 # @btime test_chaboche()
 
@@ -463,4 +466,4 @@ function simple_integration_test_fd_tangent2()
     update!(chabmat)
     @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
 end
-simple_integration_test_fd_tangent2()
+#simple_integration_test_fd_tangent2()
