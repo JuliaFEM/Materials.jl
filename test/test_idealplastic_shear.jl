@@ -1,20 +1,21 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Materials, Test
+using Test, Tensors
 
-mat = Material(IdealPlastic, tuple())
-mat.properties.youngs_modulus = 200.0e3
-mat.properties.poissons_ratio = 0.3
-mat.properties.yield_stress = 100.0
+E = 200.0e3
+nu = 0.3
+syield = 100.0
+parameters = IdealPlasticParameterState(youngs_modulus = E,
+                                        poissons_ratio = nu,
+                                        yield_stress = syield)
+
+mat = IdealPlastic(parameters=parameters)
 
 times = [0.0]
 loads = [0.0]
 dt = 0.5
-E = 200.0e3
-nu = 0.3
 G = 0.5*E/(1+nu)
-syield = 100.0
 # vm = sqrt(3)*G*ga | ea = ga
 ea = 2*syield/(sqrt(3)*G)
 # Go to elastic border
@@ -29,18 +30,19 @@ push!(loads, loads[end] - ea*dt)
  # Continue and pass yield criterion
 push!(times, times[end]+dt)
 push!(loads, loads[end] - 2*ea*dt)
-stresses = [copy(mat.stress)]
+stresses = [copy(tovoigt(mat.variables.stress))]
 for i=2:length(times)
     dtime = times[i]-times[i-1]
     dstrain31 = loads[i]-loads[i-1]
     dstrain = [0.0, 0.0, 0.0, 0.0, 0.0, dstrain31]
-    mat.dtime = dtime
-    mat.dstrain = dstrain
+    dstrain_ = fromvoigt(SymmetricTensor{2,3,Float64}, dstrain; offdiagscale=2.0)
+    ddrivers = IdealPlasticDriverState(time = dtime, strain = dstrain_)
+    #mat.dtime = dtime
+    #mat.dstrain = dstrain
+    mat.ddrivers = ddrivers
     integrate_material!(mat)
-    mat.time += mat.dtime
-    mat.strain .+= mat.dstrain
-    mat.stress .+= mat.dstress
-    push!(stresses, copy(mat.stress))
+    update_material!(mat)
+    push!(stresses, copy(tovoigt(mat.variables.stress)))
 end
 
 for i in 1:length(times)
