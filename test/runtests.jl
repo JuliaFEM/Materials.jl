@@ -4,9 +4,9 @@
 using Materials, Test
 
 @testset "Test Materials.jl" begin
-    @testset "test abstract material" begin
-        include("test_abstract_material.jl")
-    end
+    # @testset "test abstract material" begin
+    #     include("test_abstract_material.jl")
+    # end
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
@@ -22,7 +22,7 @@ using Materials, Test
     @testset "test chaboche uniaxial stress" begin
         include("test_chaboche.jl")
     end
-    @testset "test viscoplastic material model" begin
-        include("test_viscoplastic.jl")
-    end
+    # @testset "test viscoplastic material model" begin
+    #     include("test_viscoplastic.jl")
+    # end
 end

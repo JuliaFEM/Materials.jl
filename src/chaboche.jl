@@ -1,185 +1,154 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-function deviator(stress::Vector{Float64})
-    return stress - 1.0/3.0*sum(stress[1:3])*[1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+function isotropic_elasticity_tensor(lambda, mu)
+    delta(i,j) = i==j ? 1.0 : 0.0
+    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
+    jacobian = SymmetricTensor{4, 3, Float64}(g)
+    return jacobian
 end
 
-function von_mises_stress(stress::Vector{Float64})
-    return sqrt(0.5*((stress[1]-stress[2])^2 + (stress[2]-stress[3])^2 +
-        (stress[3]-stress[1])^2 + 6*(stress[4]^2+stress[5]^2+stress[6]^2)))
+@with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
+    time :: Float64 = zero(Float64)
+    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
 end
 
-mutable struct Chaboche <: AbstractMaterial
-    # Material parameters
-    youngs_modulus :: Float64
-    poissons_ratio :: Float64
-    yield_stress :: Float64
-    K_n :: Float64
-    n_n :: Float64
-    C_1 :: Float64
-    D_1 :: Float64
-    C_2 :: Float64
-    D_2 :: Float64
-    Q :: Float64
-    b :: Float64
-    # Internal state variables
-    plastic_strain :: Vector{Float64}
-    dplastic_strain :: Vector{Float64}
-    cumulative_equivalent_plastic_strain :: Float64
-    dcumulative_equivalent_plastic_strain :: Float64
-    backstress1 :: Vector{Float64}
-    dbackstress1 :: Vector{Float64}
-    backstress2 :: Vector{Float64}
-    dbackstress2 :: Vector{Float64}
-    R :: Float64
-    dR :: Float64
+@with_kw struct ChabocheParameterState <: AbstractMaterialState
+    E :: Float64 = 0.0
+    nu :: Float64 = 0.0
+    R0 :: Float64 = 0.0
+    Kn :: Float64 = 0.0
+    nn :: Float64 = 0.0
+    C1 :: Float64 = 0.0
+    D1 :: Float64 = 0.0
+    C2 :: Float64 = 0.0
+    D2 :: Float64 = 0.0
+    Q :: Float64 = 0.0
+    b :: Float64 = 0.0
 end
 
-function Chaboche()
-    youngs_modulus = 0.0
-    poissons_ratio = 0.0
-    yield_stress = 0.0
-    K_n = 0.0
-    n_n = 0.0
-    C_1 = 0.0
-    D_1 = 0.0
-    C_2 = 0.0
-    D_2 = 0.0
-    Q = 0.0
-    b = 0.0
-    # Internal state variables
-    plastic_strain = zeros(6)
-    dplastic_strain = zeros(6)
-    cumulative_equivalent_plastic_strain = 0.0
-    dcumulative_equivalent_plastic_strain = 0.0
-    backstress1 = zeros(6)
-    dbackstress1 = zeros(6)
-    backstress2 = zeros(6)
-    dbackstress2 = zeros(6)
-    R = 0.0
-    dR = 0.0
-    return Chaboche(youngs_modulus, poissons_ratio, yield_stress, K_n, n_n, C_1, D_1, C_2, D_2,
-                    Q, b, plastic_strain, dplastic_strain, cumulative_equivalent_plastic_strain,
-                    dcumulative_equivalent_plastic_strain, backstress1, dbackstress1,
-                    backstress2, dbackstress2, R, dR)
+@with_kw struct ChabocheVariableState <: AbstractMaterialState
+    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    X1 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    X2 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    cumeq :: Float64 = zero(Float64)
+    R :: Float64 = zero(Float64)
+    jacobian :: SymmetricTensor{4,3} = zero(SymmetricTensor{4,3,Float64})
 end
 
-function integrate_material!(material::Material{Chaboche})
-    mat = material.properties
-    E = mat.youngs_modulus
-    nu = mat.poissons_ratio
+@with_kw mutable struct Chaboche <: AbstractMaterial
+    drivers :: ChabocheDriverState = ChabocheDriverState()
+    ddrivers :: ChabocheDriverState = ChabocheDriverState()
+    variables :: ChabocheVariableState = ChabocheVariableState()
+    variables_new :: ChabocheVariableState = ChabocheVariableState()
+    parameters :: ChabocheParameterState = ChabocheParameterState()
+    dparameters :: ChabocheParameterState = ChabocheParameterState()
+end
+
+function integrate_material!(material::Chaboche)
+    p = material.parameters
+    v = material.variables
+    dd = material.ddrivers
+    d = material.drivers
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = p
     mu = E/(2.0*(1.0+nu))
     lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
-    R0 = mat.yield_stress
 
-    K_n = mat.K_n
-    n_n = mat.n_n
+    @unpack strain, time = d
+    dstrain = dd.strain
+    dtime = dd.time
+    @unpack stress, X1, X2, plastic_strain, cumeq, R, jacobian = v
 
-    stress = material.stress
-    strain = material.strain
-    dstress = material.dstress
-    dstrain = material.dstrain
-    D = material.jacobian
+    jacobian = isotropic_elasticity_tensor(lambda, mu)
 
-    dplastic_strain = mat.dplastic_strain
-    dcumulative_equivalent_plastic_strain = mat.dcumulative_equivalent_plastic_strain
-    dbackstress1 = mat.dbackstress1
-    dbackstress2 = mat.dbackstress2
-    dR = mat.dR
-
-    # peeq = material.cumulative_equivalent_plastic_strain
-    X_1 = mat.backstress1
-    X_2 = mat.backstress2
-    R = mat.R
-
-    fill!(D, 0.0)
-    D[1,1] = D[2,2] = D[3,3] = 2.0*mu + lambda
-    D[4,4] = D[5,5] = D[6,6] = mu
-    D[1,2] = D[2,1] = D[2,3] = D[3,2] = D[1,3] = D[3,1] = lambda
-
-    dstress[:] .= D*dstrain
-    stress_tr = stress + dstress
-
-    f_tr = von_mises_stress(stress_tr - X_1 - X_2) - (R0 + R)
-    if f_tr <= 0.0
-        fill!(dplastic_strain, 0.0)
-        mat.dcumulative_equivalent_plastic_strain = 0.0
-        fill!(dbackstress1, 0.0)
-        fill!(dbackstress2, 0.0)
-        mat.dR = 0.0
-        return nothing
-    else
-        g! = create_nonlinear_system_of_equations(material, dstrain, material.dtime)
-        x0 = [stress_tr; R; X_1; X_2]
+    stress += dcontract(jacobian, dstrain)
+    seff = stress - X1 - X2
+    seff_dev = dev(seff)
+    f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
+    if f > 0.0
+        g! = create_nonlinear_system_of_equations(material)
+        x0 = [tovoigt(stress); R; tovoigt(X1); tovoigt(X2)]
         F = similar(x0)
-        res = nlsolve(g!, x0)
+        res = nlsolve(g!, x0; autodiff = :forward)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
-        stress = x[1:6]
+
+        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
         R = x[7]
-        X_1 = x[8:13]
-        X_2 = x[14:19]
-        seff = von_mises_stress(stress - X_1 - X_2)
-        dotp = ((seff - (R0+R))/K_n)^n_n
-        dp = dotp*material.dtime
-        s = deviator(stress - X_1 - X_2)
-        n = 1.5*s/seff
-        n[4:end] .*= 2.0
-        dvarepsilon_pl = dp*n
-        mat.dplastic_strain[:] .= dvarepsilon_pl
-        mat.dcumulative_equivalent_plastic_strain = dp
-        mat.dbackstress1[:] .= X_1 - mat.backstress1
-        mat.dbackstress2[:] .= X_2 - mat.backstress2
-        mat.dR = R-mat.R
-        dstress[:] .= stress - material.stress
-        D[:,:] .= D - (D*n*n'*D) / (n'*D*n)
+        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
+        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
+        seff = stress - X1 - X2
+        seff_dev = dev(seff)
+        f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
+        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn
+        dp = dotp*dtime
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)
+
+        plastic_strain += dp*n
+        cumeq += dp
+        # Compute Jacobian
+        function residuals(x)
+            F = similar(x)
+            g!(F, x)
+            return F
+        end
+        drdx = ForwardDiff.jacobian(residuals, x)
+        drde = zeros((length(x),6))
+        drde[1:6, 1:6] = -tovoigt(jacobian)
+        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx\drde)[1:6, 1:6])
     end
-    return nothing
+    variables_new = ChabocheVariableState(stress = stress,
+                                          X1 = X1,
+                                          X2 = X2,
+                                          R = R,
+                                          plastic_strain = plastic_strain,
+                                          cumeq = cumeq,
+                                          jacobian = jacobian)
+    material.variables_new = variables_new
 end
 
-function create_nonlinear_system_of_equations(material_::Material{Chaboche}, dvarepsilon_tot::Vector{Float64}, dt::Float64)
-    material = material_.properties
-    D = material_.jacobian # Should be updated
-    K_n = material.K_n
-    n_n = material.n_n
-    C_1 = material.C_1
-    D_1 = material.D_1
-    C_2 = material.C_2
-    D_2 = material.D_2
-    Q = material.Q
-    b = material.b
-    R0 = material.yield_stress
-    X_1n = material.backstress1
-    X_2n = material.backstress2
-    sigma_n = material_.stress
-    R_n = material.R
-    function g!(F, x) # System of non-linear equations
-        sigma = x[1:6]
-        R = x[7]
-        X_1 = x[8:13]
-        X_2 = x[14:19]
-        seff = von_mises_stress(sigma - X_1 - X_2)
-        f = seff - (R0+R)
-        dotp = ((f >= 0.0 ? f : 0.0)/K_n)^n_n
-        dp = dotp*dt
-        s = deviator(sigma - X_1 - X_2)
-        n = 1.5*s/seff
-        n[4:end] .*= 2.0
-        dvarepsilon_pl = dp*n
-        f1 = sigma_n - sigma + D*(dvarepsilon_tot - dvarepsilon_pl)
-        f2 = R_n - R + b*(Q-R)*dp
-        if isapprox(C_1, 0.0)
-            f3 = X_1n - X_1
+function create_nonlinear_system_of_equations(material::Chaboche)
+    p = material.parameters
+    v = material.variables
+    dd = material.ddrivers
+    d = material.drivers
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = p
+    mu = E/(2.0*(1.0+nu))
+    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+
+    @unpack strain, time = d
+    dstrain = dd.strain
+    dtime = dd.time
+    @unpack stress, X1, X2, plastic_strain, cumeq, R = v
+
+    function g!(F, x::Vector{T}) where {T} # System of non-linear equations
+        jacobian = isotropic_elasticity_tensor(lambda, mu)
+        stress_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
+        R_ = x[7]
+        X1_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[8:13])
+        X2_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[14:19])
+
+        seff = stress_ - X1_ - X2_
+        seff_dev = dev(seff)
+        f = sqrt(1.5)*norm(seff_dev) - (R0 + R_)
+
+        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn
+        dp = dotp*dtime
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)
+        dstrain_plastic = dp*n
+        tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain - dstrain_plastic))
+        F[7] = R - R_ + b*(Q-R_)*dp
+        if isapprox(C1, 0.0)
+            tovoigt!(view(F,8:13),X1 - X1_)
         else
-            f3 = X_1n - X_1 + 2.0/3.0*C_1*dp*(n - 1.5*D_1/C_1*X_1)
+            tovoigt!(view(F,8:13), X1 - X1_ + 2.0/3.0*C1*dp*(n - 1.5*D1/C1*X1_))
         end
-        if isapprox(C_2, 0.0)
-            f4 = X_2n - X_2
+        if isapprox(C2, 0.0)
+            tovoigt!(view(F,14:19), X2 - X2_)
         else
-            f4 = X_2n - X_2 + 2.0/3.0*C_2*dp*(n - 1.5*D_2/C_2*X_2)
+            tovoigt!(view(F, 14:19), X2 - X2_ + 2.0/3.0*C2*dp*(n - 1.5*D2/C2*X2_))
         end
-        F[:] = [f1; f2; f3; f4]
     end
     return g!
 end
