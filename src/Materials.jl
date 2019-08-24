@@ -3,7 +3,7 @@
 
 module Materials
 
-using LinearAlgebra, ForwardDiff, Tensors, NLsolve
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, MFrontInterface
 
 abstract type AbstractMaterial end
 
@@ -81,5 +81,8 @@ export ViscoPlastic
 
 include("uniaxial_increment.jl")
 export uniaxial_increment!
+
+include("mfront.jl")
+export MFront
 
 end
