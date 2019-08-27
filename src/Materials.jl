@@ -34,6 +34,9 @@ end
 
 export integrate_material!, update_material!, reset_material!
 
+include("umat.jl")
+export UmatMaterial, UmatDriverState, UmatParameterState, UmatVariableState, UmatOtherState
+
 include("idealplastic.jl")
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
 
