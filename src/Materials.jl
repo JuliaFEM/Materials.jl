@@ -32,7 +32,8 @@ function reset_material!(material::M) where {M <: AbstractMaterial}
     material.variables_new = typeof(material.variables_new)()
 end
 
-export integrate_material!, update_material!, reset_material!
+include("mfront.jl")
+export MFrontMaterial, MFrontDriverState, MFrontVariableState, MFrontExternalVariableState
 
 include("idealplastic.jl")
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
@@ -45,5 +46,7 @@ export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableSt
 
 include("uniaxial_increment.jl")
 export uniaxial_increment!
+
+export integrate_material!, update_material!, reset_material!
 
 end
