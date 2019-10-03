@@ -63,8 +63,14 @@ function integrate_material!(material::IdealPlastic)
         dp = 1.0/(3.0*mu)*(stress_v - R0)
         plastic_strain += dp*n
         cumeq += dp
+
         stress -= dcontract(jacobian, dp*n)
-        jacobian -= otimes(dcontract(jacobian, n), dcontract(n, jacobian))/dcontract(dcontract(n, jacobian), n)
+        delta(i,j) = i==j ? 1.0 : 0.0
+        II = SymmetricTensor{4,3}((i,j,k,l) -> 0.5*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k)))
+        P = II - 1.0/3.0*SymmetricTensor{4,3}((i,j,k,l) -> delta(i,j)*delta(k,l))
+        EE = II + dp*dcontract(jacobian, 1.5*P/R0 - otimes(n,n)/R0)
+        ED = dcontract(inv(EE),jacobian)
+        jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED))/dcontract(dcontract(n, ED), n)
     end
     variables_new = IdealPlasticVariableState(stress=stress,
                                               plastic_strain=plastic_strain,

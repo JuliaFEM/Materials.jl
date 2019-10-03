@@ -9,7 +9,7 @@ abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
 
 @generated function Base.:+(state::T, dstate::T) where {T <: AbstractMaterialState}
-   expr = [:(state.$p+ dstate.$p) for p in fieldnames(T)]
+   expr = [:(state.$p + dstate.$p) for p in fieldnames(T)]
    return :(T($(expr...)))
 end
 
@@ -24,12 +24,14 @@ function update_material!(material::M) where {M <: AbstractMaterial}
     material.parameters += material.dparameters
     material.variables = material.variables_new
     reset_material!(material)
+    return nothing
 end
 
 function reset_material!(material::M) where {M <: AbstractMaterial}
     material.ddrivers = typeof(material.ddrivers)()
     material.dparameters = typeof(material.dparameters)()
     material.variables_new = typeof(material.variables_new)()
+    return nothing
 end
 
 export integrate_material!, update_material!, reset_material!
