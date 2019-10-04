@@ -13,7 +13,7 @@ abstract type AbstractMaterialState end
    return :(T($(expr...)))
 end
 
-export AbstractMaterial
+export AbstractMaterial, AbstractMaterialState
 
 function integrate_material!(material::M) where {M<:AbstractMaterial}
     error("One needs to define how to integrate material $M!")
