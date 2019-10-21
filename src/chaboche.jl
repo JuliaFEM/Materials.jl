@@ -1,13 +1,6 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-function isotropic_elasticity_tensor(lambda, mu)
-    delta(i,j) = i==j ? 1.0 : 0.0
-    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
-    jacobian = SymmetricTensor{4, 3, Float64}(g)
-    return jacobian
-end
-
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
     strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
