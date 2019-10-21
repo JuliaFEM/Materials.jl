@@ -36,6 +36,13 @@ end
 
 export integrate_material!, update_material!, reset_material!
 
+function isotropic_elasticity_tensor(lambda, mu)
+    delta(i,j) = i==j ? 1.0 : 0.0
+    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
+    jacobian = SymmetricTensor{4, 3, Float64}(g)
+    return jacobian
+end
+
 include("idealplastic.jl")
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
 
