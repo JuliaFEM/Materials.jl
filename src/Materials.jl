@@ -49,7 +49,7 @@ export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealP
 include("chaboche.jl")
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-include("stress_driven_uniaxial_increment.jl")
+include("DSA.jl")
 export DSA, DSADriverState, DSAParameterState, DSAVariableState
 
 # include("viscoplastic.jl")
