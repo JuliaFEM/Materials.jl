@@ -163,7 +163,10 @@ function create_nonlinear_system_of_equations(material::DSA)
         F[20] = ta - ta_ + dtime - ta_/w * dp
         F[21] = Ra - Ra_ + b*(Ras-Ra_)*dp
 
-        println(F)
+        #println("------- Next F: -------")
+        #println(summary(F))
+        #println("------- values: -------")
+        #println(F)
 
     end
     return g!
