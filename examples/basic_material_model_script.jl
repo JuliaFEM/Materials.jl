@@ -3,7 +3,7 @@ using Einsum
 using Test
 using NLsolve
 using Plots
-plotly()
+pyplot() # OLD BACKEND: plotly()
 
 # Tensors
 I_ = Matrix(1.0I,3,3) # Second order identity tensor
