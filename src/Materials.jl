@@ -55,4 +55,7 @@ export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableSt
 include("uniaxial_increment.jl")
 export uniaxial_increment!
 
+include("biaxial_increment.jl")
+export biaxial_increment!
+
 end
