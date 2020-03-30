@@ -49,16 +49,10 @@ export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealP
 include("chaboche.jl")
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-include("DSA.jl")
-export DSA, DSADriverState, DSAParameterState, DSAVariableState
-
 # include("viscoplastic.jl")
 # export ViscoPlastic
 
 include("uniaxial_increment.jl")
 export uniaxial_increment!
-
-include("biaxial_increment.jl")
-export biaxial_increment!
 
 end
