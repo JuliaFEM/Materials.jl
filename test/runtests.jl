@@ -22,6 +22,9 @@ using Materials, Test
     @testset "test chaboche uniaxial stress" begin
         include("test_chaboche.jl")
     end
+    @testset "test biaxial increment" begin
+        include("test_biaxial_increment.jl")
+    end
     # @testset "test viscoplastic material model" begin
     #     include("test_viscoplastic.jl")
     # end
