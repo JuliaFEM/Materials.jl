@@ -15,7 +15,6 @@ dtimes = [dtime, dtime, dtime, dtime, 1.0]
 dstrains11 = [dstrain11, dstrain11, dstrain11, -dstrain11, -4*dstrain11]
 dstrains12 = [dstrain12, dstrain12, dstrain12, -dstrain12, -4*dstrain12]
 plasticity_test = zeros(length(dstrains11)-1)
-multiaxial_test = zeros(length(dstrains11))
 for i in 1:length(dtimes)
     dstrain11 = dstrains11[i]
     dtime = dtimes[i]
@@ -27,10 +26,7 @@ for i in 1:length(dtimes)
         plasticity_test[i-1] = !(isapprox(stresses[i+1][1], stresses[i][1]
          + dstrains11[i]/dstrains11[1]*stresses[2][1]; atol=1e-9))
     end
-    if !(all(x->isapprox(x,0.0;atol = atol=1e-8),tovoigt(mat.variables.stress; offdiagscale=2.0)[2:5]))
-        # Check if test has multiaxial stress
-        multiaxial_test[i] = 1
-    end
+    @test !iszero(tovoigt(mat.variables.stress)[1]) && !iszero(tovoigt(mat.variables.stress)[end])
+    @test isapprox(tovoigt(mat.variables.stress; offdiagscale=2.0)[2:5],zeros(4); atol=1e-5)
 end
 @test any(x->x==1,plasticity_test)
-@test any(x->x==1,multiaxial_test)
