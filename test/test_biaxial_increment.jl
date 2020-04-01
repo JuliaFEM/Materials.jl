@@ -2,13 +2,21 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 using Test, Tensors
 dtime = 0.25
-parameters = IdealPlasticParameterState(youngs_modulus = 200.0e3,
-                                        poissons_ratio = 0.3,
-                                        yield_stress = 100.0)
-mat = IdealPlastic(parameters=parameters)
+parameters = ChabocheParameterState(E = 200.0e3,
+                                    nu = 0.3,
+                                    R0 = 100.0,
+                                    Kn = 100.0,
+                                    nn = 10.0,
+                                    C1 = 10000.0,
+                                    D1 = 100.0,
+                                    C2 = 50000.0,
+                                    D2 = 1000.0,
+                                    Q = 50.0,
+                                    b = 0.1)
+mat = Chaboche(parameters = parameters)
 times = [mat.drivers.time]
 stresses = [copy(tovoigt(mat.variables.stress))]
-dstrain11 = 1e-3*dtime
+dstrain11 = 1e-4*dtime
 dstrain12 = 1e-3*dtime
 
 dtimes = [dtime, dtime, dtime, dtime, 1.0]
@@ -22,9 +30,7 @@ for i in 1:length(dtimes)
     update_material!(mat)
     push!(stresses, copy(tovoigt(mat.variables.stress)))
     if i > 1
-        # Check if test reaches plasticity by looking if stresses remain linear
-        plasticity_test[i-1] = !(isapprox(stresses[i+1][1], stresses[i][1]
-         + dstrains11[i]/dstrains11[1]*stresses[2][1]; atol=1e-9))
+        plasticity_test[i-1] = mat.variables.cumeq > 0.0
     end
     @test !iszero(tovoigt(mat.variables.stress)[1]) && !iszero(tovoigt(mat.variables.stress)[end])
     @test isapprox(tovoigt(mat.variables.stress; offdiagscale=2.0)[2:5],zeros(4); atol=1e-5)
