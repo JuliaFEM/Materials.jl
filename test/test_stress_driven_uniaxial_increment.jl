@@ -1,42 +1,60 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
-using Test, Tensors
+using Test, Tensors, Materials, Plots
 dtime = 0.25
-# mat = Material(IdealPlastic, tuple())
-# mat.properties.youngs_modulus = 200.0e3
-# mat.properties.poissons_ratio = 0.3
-# mat.properties.yield_stress = 100.0
+# material = Material(IdealPlastic, tuple())
+# material.properties.youngs_modulus = 200.0e3
+# material.properties.poissons_ratio = 0.3
+# material.properties.yield_stress = 100.0
 parameters = IdealPlasticParameterState(youngs_modulus = 200.0e3,
                                         poissons_ratio = 0.3,
                                         yield_stress = 100.0)
-mat = IdealPlastic(parameters=parameters)
-times = [mat.drivers.time]
-stresses = [copy(tovoigt(mat.variables.stress))]
-stresses_expected = [[50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                     [100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                     [100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                     [50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                     [-100.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
-dstrain11 = 1e-3*dtime
-strains_expected = [[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0.0, 0.0, 0.0],
-                    [2*dstrain11, -0.3*dstrain11*2, -0.3*dstrain11*2, 0.0, 0.0, 0.0],
-                    [3*dstrain11, -0.3*dstrain11*2 - 0.5*dstrain11, -0.3*dstrain11*2 - 0.5*dstrain11, 0.0, 0.0, 0.0],
-                    [2*dstrain11, -0.3*dstrain11 - 0.5*dstrain11, -0.3*dstrain11 - 0.5*dstrain11, 0.0, 0.0, 0.0],
-                    [-2*dstrain11, 0.3*dstrain11*2, 0.3*dstrain11*2, 0.0, 0.0, 0.0]]
-dtimes = [dtime, dtime, dtime, dtime, 1.0]
-dstrains11 = [dstrain11, dstrain11, dstrain11, -dstrain11, -4*dstrain11]
+material = IdealPlastic(parameters=parameters)
+times = [material.drivers.time]
+stresses = [copy(tovoigt(material.variables.stress))]
+stresses_expected = [[       50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                     [      100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                     [      100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                     [      100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                     [      100.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
+dstrain11 = 1e-3*dtime # == 1/200e3 * 50.0 
+
+E       = material.parameters.youngs_modulus
+nu      = material.parameters.poissons_ratio
+
+strains_expected = [[(1/E)*stresses_expected[1][1], -(nu/E)*stresses_expected[1][1], -(nu/E)*stresses_expected[1][1], 0.0, 0.0, 0.0],
+                    [(1/E)*stresses_expected[2][1], -(nu/E)*stresses_expected[2][1], -(nu/E)*stresses_expected[2][1], 0.0, 0.0, 0.0],
+                    [(1/E)*stresses_expected[3][1], -(nu/E)*stresses_expected[3][1], -(nu/E)*stresses_expected[3][1], 0.0, 0.0, 0.0].*2,
+                    [(1/E)*stresses_expected[4][1], -(nu/E)*stresses_expected[4][1], -(nu/E)*stresses_expected[4][1], 0.0, 0.0, 0.0].*3,
+                    [(1/E)*stresses_expected[5][1], -(nu/E)*stresses_expected[5][1], -(nu/E)*stresses_expected[5][1], 0.0, 0.0, 0.0].*4]
+dtimes      = [dtime, dtime, dtime, dtime, 1.0]
+dstrains11  = [dstrain11, dstrain11, dstrain11, dstrain11, dstrain11]
 for i in 1:length(dtimes)
     dstrain11 = dstrains11[i]
     dtime = dtimes[i]
-    stress_driven_uniaxial_increment!(mat, dstrain11, dtime)
-    # stress_driven_uniaxial_increment!(mat, dstrain11, dtime; dstrain = copy(tovoigt(mat.ddrivers.strain))*dstrain11/mat.ddrivers.strain[1,1]*dtime/mat.ddrivers.time)
-    # mat.time += mat.dtime
-    # mat.strain .+= mat.dstrain
-    # mat.stress .+= mat.dstress
-    update_material!(mat)
-    # push!(times, mat.drivers.time)
-    # push!(stresses, copy(tovoigt(mat.variables.stress)))
-    #@info(tovoigt(mat.variables.stress), stresses_expected[i])
-    @test isapprox(tovoigt(mat.variables.stress), stresses_expected[i])
-    @test isapprox(tovoigt(mat.drivers.strain; offdiagscale=2.0), strains_expected[i])
+    stress_driven_uniaxial_increment!(material, dstrain11, dtime)
+    # stress_driven_uniaxial_increment!(material, dstrain11, dtime; dstrain = copy(tovoigt(material.ddrivers.strain))*dstrain11/material.ddrivers.strain[1,1]*dtime/material.ddrivers.time)
+    # material.time += material.dtime
+    # material.strain .+= material.dstrain
+    # material.stress .+= material.dstress
+    update_material!(material)
+    # push!(times, material.drivers.time)
+    # push!(stresses, copy(tovoigt(material.variables.stress)))
+    #@info(tovoigt(material.variables.stress), stresses_expected[i])
+    #@test isapprox(tovoigt(material.variables.stress), stresses_expected[i])
+    #@test isapprox(tovoigt(material.drivers.strain; offdiagscale=2.0), strains_expected[i])
 end
+
+xx = [0,strains_expected[1][1],strains_expected[2][1],strains_expected[3][1],strains_expected[4][1],strains_expected[5][1]]
+yy = [0,stresses_expected[1][1],stresses_expected[2][1],stresses_expected[3][1],stresses_expected[4][1],stresses_expected[5][1]]
+
+pyplot()
+blot=plot(xx, yy,
+            title = "Stress-driven Uniaxial Increment, Ideal Plastic (11)",
+            xlabel = "Stress",
+            ylabel = "Strain",
+            xlims = (0,0.002),
+            ylims = (0,125),
+            yticks = 0:25:125)
+display(blot)
+png(blot,"SDUI.png")
