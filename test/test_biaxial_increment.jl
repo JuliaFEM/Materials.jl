@@ -16,7 +16,7 @@ parameters = ChabocheParameterState(E = 200.0e3,
 mat = Chaboche(parameters = parameters)
 times = [mat.drivers.time]
 stresses = [copy(tovoigt(mat.variables.stress))]
-dstrain11 = 1e-4*dtime
+dstrain11 = 1e-3*dtime
 dstrain12 = 1e-3*dtime
 
 dtimes = [dtime, dtime, dtime, dtime, 1.0]
