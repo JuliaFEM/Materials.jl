@@ -2,10 +2,3 @@ docs/build/
 docs/site/
 *.pyc
 *.swp
-Project.toml
-Materials/Project.toml
-Materials/Manifest.toml
-Manifest.toml
-.vscode/settings.json
-Project.toml
-Project.toml
