@@ -49,9 +49,6 @@ export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealP
 include("chaboche.jl")
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-include("DSA.jl")
-export DSA, DSADriverState, DSAParameterState, DSAVariableState
-
 # include("viscoplastic.jl")
 # export ViscoPlastic
 
