@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
- function stress_driven_uniaxial_increment!(material, dstress11,
+function stress_driven_uniaxial_increment!(material, dstress11,
         dt; dstrain=[dstress11/200e3, -0.3*dstress11/200e3, -0.3*dstress11/200e3, 0.0, 0.0, 0.0], max_iter=50, norm_acc=1e-9)
     converged = false
     stress0 = tovoigt(material.variables.stress)

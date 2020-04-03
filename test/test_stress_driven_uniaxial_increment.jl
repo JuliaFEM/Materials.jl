@@ -31,6 +31,7 @@ dstress = 50.0
 
 dtimes      = [dtime, dtime, dtime, 1e3, dtime, 1e3]
 dstresses11  = [dstress, dstress, dstress, 0.0, -dstress, -4*dstress]
+
 for i in 1:length(dtimes)
     dstress11 = dstresses11[i]
     dtime = dtimes[i]
