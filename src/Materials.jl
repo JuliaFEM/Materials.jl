@@ -58,4 +58,7 @@ export uniaxial_increment!
 include("biaxial_increment.jl")
 export biaxial_increment!
 
+include("stress_driven_uniaxial_increment.jl")
+export stress_driven_uniaxial_increment!
+
 end
