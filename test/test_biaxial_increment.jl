@@ -25,6 +25,7 @@ dstrains12 = [dstrain12, dstrain12, dstrain12, -dstrain12, -4*dstrain12]
 plasticity_test = zeros(length(dstrains11)-1)
 for i in 1:length(dtimes)
     dstrain11 = dstrains11[i]
+    dstrain12 = dstrains12[i]
     dtime = dtimes[i]
     biaxial_increment!(mat, dstrain11, dstrain12, dtime)
     update_material!(mat)
