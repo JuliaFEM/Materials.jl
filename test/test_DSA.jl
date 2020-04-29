@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-using Tensors, Materials, Test, PyPlot
+using Tensors, Materials, Test
 
 parameters = DSAParameterState( E  =   200.0e3,
                                 nu =     0.3,
@@ -101,29 +101,29 @@ dcumeq = cumeqs[end] - cumeqs[end - 1]
 @test dcumeq > 0
 
 # Plotting
-x11     = [a[1] for a in strains]
-y11     = [a[1] for a in stresses]
-x112    = [a[1] for a in strains2]
-y112    = [a[1] for a in stresses2]
-RasNorm = [Ra / parameters.P1 for Ra in Ras]
-tasNorm = [ta / maximum(tas) for ta in tas]
-
-fig = figure("test_DSA.jl", figsize = (5, 12)) # Create a new blank figure
-subplot(211)
-plot(x11,y11, label = "interrupted")
-plot(x112,y112,linestyle = "--", label = "uninterrupted")
-title("test_DSA.jl")
-xlabel("Strain, \$\\varepsilon_{11}\$")
-ylabel("Stress, \$\\sigma_{11}\$")
-legend()
-subplot(212)
-plot(times, RasNorm, label = "\$R_a\$")
-plot(times, tasNorm, linestyle = "--", label = "\$t_a\$")
-xlim([3600.0, maximum(times)])
-title("Normalized Evolution of \$R_a\$ & \$t_a\$")
-xlabel("Time")
-ylabel("Ra, ta")
-legend()
-fig.canvas.draw() # Update the figure
-#show()
-gcf()
+# using PyPlot
+# x11     = [a[1] for a in strains]
+# y11     = [a[1] for a in stresses]
+# x112    = [a[1] for a in strains2]
+# y112    = [a[1] for a in stresses2]
+# RasNorm = [Ra / parameters.P1 for Ra in Ras]
+# tasNorm = [ta / maximum(tas) for ta in tas]
+# fig = figure("test_DSA.jl", figsize = (5, 12)) # Create a new blank figure
+# subplot(211)
+# plot(x11,y11, label = "interrupted")
+# plot(x112,y112,linestyle = "--", label = "uninterrupted")
+# title("test_DSA.jl")
+# xlabel("Strain, \$\\varepsilon_{11}\$")
+# ylabel("Stress, \$\\sigma_{11}\$")
+# legend()
+# subplot(212)
+# plot(times, RasNorm, label = "\$R_a\$")
+# plot(times, tasNorm, linestyle = "--", label = "\$t_a\$")
+# xlim([3600.0, maximum(times)])
+# title("Normalized Evolution of \$R_a\$ & \$t_a\$")
+# xlabel("Time")
+# ylabel("Ra, ta")
+# legend()
+# fig.canvas.draw() # Update the figure
+# show()
+# gcf()
