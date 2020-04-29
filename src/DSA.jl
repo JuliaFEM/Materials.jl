@@ -7,27 +7,27 @@
 end
 
 @with_kw struct DSAParameterState <: AbstractMaterialState
-    E::Float64    = 0.0
-    nu::Float64   = 0.0
-    R0::Float64   = 0.0
-    Kn::Float64   = 0.0
-    nn::Float64   = 0.0
-    C1::Float64   = 0.0
-    D1::Float64   = 0.0
-    C2::Float64   = 0.0
-    D2::Float64   = 0.0
-    Q::Float64    = 0.0
-    b::Float64    = 0.0
-    w::Float64    = 0.0
-    P1::Float64   = 0.0
-    P2::Float64   = 0.0
-    m::Float64    = 0.0
-    m1::Float64   = 0.0
-    m2::Float64   = 0.0
-    M1::Float64   = 0.0
-    M2::Float64   = 0.0
-    ba::Float64   = 0.0
-    zeta::Float64 = 0.0
+    E::Float64  = 0.0
+    nu::Float64 = 0.0
+    R0::Float64 = 0.0
+    Kn::Float64 = 0.0
+    nn::Float64 = 0.0
+    C1::Float64 = 0.0
+    D1::Float64 = 0.0
+    C2::Float64 = 0.0
+    D2::Float64 = 0.0
+    Q::Float64  = 0.0
+    b::Float64  = 0.0
+    w::Float64  = 0.0
+    P1::Float64 = 0.0
+    P2::Float64 = 0.0
+    m::Float64  = 0.0
+    m1::Float64 = 0.0
+    m2::Float64 = 0.0
+    M1::Float64 = 0.0
+    M2::Float64 = 0.0
+    ba::Float64 = 0.0
+    xi::Float64 = 0.0
 end
 
 @with_kw struct DSAVariableState <: AbstractMaterialState
@@ -56,7 +56,7 @@ function integrate_material!(material::DSA)
     v  = material.variables
     dd = material.ddrivers
     d  = material.drivers
-    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, zeta = p
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
     mu     = E / ( 2.0 * (1.0 + nu) )
     lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
     @unpack strain, time = d
@@ -68,7 +68,7 @@ function integrate_material!(material::DSA)
     stress  += dcontract(jacobian, dstrain)
     seff     = stress - X1 - X2
     seff_dev = dev(seff)
-    f        = sqrt(1.5) * norm(seff_dev) - (R0 + R + (1 - zeta) * Ra)
+    f        = sqrt(1.5) * norm(seff_dev) - (R0 + R + (1 - xi) * Ra)
 
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
@@ -87,8 +87,8 @@ function integrate_material!(material::DSA)
 
         seff     = stress - X1 - X2
         seff_dev = dev(seff)
-        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R + (1 - zeta) * Ra )
-        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + zeta * Ra) )^nn
+        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R + (1 - xi) * Ra )
+        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + xi * Ra) )^nn
         dp       = dotp * dtime
         n        = sqrt(1.5) * seff_dev / norm(seff_dev)
         plastic_strain += dp * n
@@ -115,7 +115,7 @@ function create_nonlinear_system_of_equations(material::DSA)
     v  = material.variables
     dd = material.ddrivers
     d  = material.drivers
-    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, zeta = p
+    @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
     mu     = E / ( 2.0 * (1.0 + nu) )
     lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
     @unpack strain, time = d
@@ -134,8 +134,8 @@ function create_nonlinear_system_of_equations(material::DSA)
         jacobian = isotropic_elasticity_tensor(lambda, mu)
         seff     = stress_ - X1_ - X2_
         seff_dev = dev(seff)
-        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R_ + (1 - zeta) * Ra_ )
-        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + zeta * Ra_) )^nn
+        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R_ + (1 - xi) * Ra_ )
+        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + xi * Ra_) )^nn
         dp       = dotp * dtime
         n        = sqrt(1.5) * seff_dev / norm(seff_dev)
         Ras      = P1 * (1.0 - exp(-P2 * ta_^m))
@@ -168,7 +168,7 @@ function create_nonlinear_system_of_equations(material::DSA)
             tovoigt!(view(F, 14:19), X2 - X2_ + 2.0 / 3.0 * C2 * dp * ( n - 1.5 * D2 / C2 * X2_ ) - dtime * sr2_)
         end
         F[20] = ta - ta_ + dtime - (ta_ / w) * dp
-        F[21] = Ra - Ra_ + b * (Ras - Ra_) * dp
+        F[21] = Ra - Ra_ + ba * (Ras - Ra_) * dp
     end
     return g!
 end
