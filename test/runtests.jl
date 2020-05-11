@@ -28,6 +28,12 @@ using Materials, Test
     @testset "test memory" begin
         include("test_memory.jl")
     end
+    @testset "test stress-driven uniaxial increment" begin
+        include("test_stress_driven_uniaxial_increment.jl")
+    end
+    @testset "test DSA material model" begin
+        include("test_DSA.jl")
+    end
     # @testset "test viscoplastic material model" begin
     #     include("test_viscoplastic.jl")
     # end

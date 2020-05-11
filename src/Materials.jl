@@ -71,4 +71,7 @@ export biaxial_increment!
 include("stress_driven_uniaxial_increment.jl")
 export stress_driven_uniaxial_increment!
 
+include("DSA.jl")
+export DSA, DSADriverState, DSAParameterState, DSAVariableState
+
 end
