@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 using Test, Tensors
-using Materials
+
 parameters = MemoryParameterState(E = 200.0e3,
                                     nu = 0.3,
                                     R0 = 100.0,
@@ -36,7 +36,7 @@ zetas = [copy(tovoigt(mat.variables.zeta; offdiagscale=2.0))]
 
 n_cycles = 30
 ppc = 40
-t = range(0, n_cycles; length=n_cycles*ppc+1)
+t = range(0.0, Float64(n_cycles); length=n_cycles*ppc+1)
 dtime = t[end]/(length(t)-1)
 
 # Amplitude 1
