@@ -36,7 +36,7 @@ zetas = [copy(tovoigt(mat.variables.zeta; offdiagscale=2.0))]
 
 n_cycles = 30
 ppc = 40
-t = range(0.0, Float64(n_cycles); length=n_cycles*ppc+1)
+t = range(0.0;  stop=Float64(n_cycles), length=n_cycles*ppc+1)
 dtime = t[end]/(length(t)-1)
 
 # Amplitude 1
