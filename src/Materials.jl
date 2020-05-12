@@ -16,7 +16,7 @@ end
 export AbstractMaterial, AbstractMaterialState
 
 function integrate_material!(material::M) where {M<:AbstractMaterial}
-    error("One needs to define how to integrate material $M!")
+    error("One needs to define how to integrate material $(M)!")
 end
 
 function update_material!(material::M) where {M <: AbstractMaterial}
