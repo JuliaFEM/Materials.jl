@@ -43,11 +43,21 @@ function isotropic_elasticity_tensor(lambda, mu)
     return jacobian
 end
 
+function isotropic_compliance_tensor(lambda, mu)
+    delta(i,j) = i==j ? 1.0 : 0.0
+    g(i,j,k,l) = -lambda/(2.0*mu*(3.0*lambda + 2.0*mu))*delta(i,j)*delta(k,l) + 1.0/(4.0*mu)*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
+    compliance = SymmetricTensor{4, 3, Float64}(g)
+    return compliance
+end
+
 include("idealplastic.jl")
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
 
 include("chaboche.jl")
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
+
+include("memory.jl")
+export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState
 
 # include("viscoplastic.jl")
 # export ViscoPlastic
