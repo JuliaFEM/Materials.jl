@@ -1,7 +1,10 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+"""Alias for symmetric tensor type of rank 2, dimension 3."""
 const Symm2{T} = SymmetricTensor{2,3,T}
+
+"""Alias for symmetric tensor type of rank 4, dimension 3."""
 const Symm4{T} = SymmetricTensor{4,3,T}
 
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
@@ -42,17 +45,42 @@ end
     dparameters :: ChabocheParameterState = ChabocheParameterState()
 end
 
-# Convert the elastic constants (E, ν) to the Lamé constants (μ, λ). Isotropic material.
+"""
+    lame(E, ν)
+
+Convert the elastic parameters (E, ν) to the Lamé parameters (μ, λ). Isotropic material.
+"""
 @inline function lame(E::Real, ν::Real)
-    μ = E/(2.0*(1.0+nu))
-    λ = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    μ = E / (2.0 * (1.0 + nu))
+    λ = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
     return μ, λ
 end
 
-# Adaptors for NLsolve. Marshal the problem state into a Vector and back.
+"""
+    delame(E, ν)
+
+Convert the Lamé parameters (μ, λ) to the elastic parameters (E, ν). Isotropic material.
+"""
+@inline function delame(μ::Real, λ::Real)
+    E = μ * (3.0 * λ + 2.0 * μ) / (λ + μ)
+    ν = λ / (2.0 * (λ + μ))
+    return E, ν
+end
+
+"""
+    state_to_vector(σ::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+
+Marshal the problem state into a `Vector`. Adaptor for `nlsolve`.
+"""
 @inline function state_to_vector(σ::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
     return [tovoigt(σ), R, tovoigt(X1), tovoigt(X2)]
 end
+
+"""
+    state_from_vector(x::AbstractVector{Real})
+
+Unmarshal the problem state from a `Vector`. Adaptor for `nlsolve`.
+"""
 @inline function state_from_vector(x::AbstractVector{Real})
     σ = fromvoigt(Symm2{S}, @view x[1:6])
     R = x[7]
@@ -61,25 +89,37 @@ end
     return σ, R, X1, X2
 end
 
-# f!(F, x) -> f(x)
-#
-# Take away the bang; i.e. produce an equivalent single-argument non-mutating
-# function f (that allocates and returns the result), when given a two-argument
-# mutating function f! (which writes its result into the first argument).
-#
-# When the types, sizes and shapes of the output F are the same as those for the
-# input x, it is enough to supply just f!.
-#
-# When the output type, size and/or shape is different from the input, then an
-# example instance of the correct type with the correct size and shape for the
-# output must be supplied, as the ex argument. It is only used to allocate
-# uninitialized memory with the right type, size and shape whenever f is called.
-#
-# (While the type of F is known at compile time, the size and shape are
-# typically runtime properties, not encoded into the type. For example, arrays
-# have the number of dimensions encoded into the type, but the length of each
-# dimension is defined at run time, when an instance is created.)
-#
+"""
+    debang(f!, ex=nothing)
+
+Take away the bang; i.e. convert a mutating function into non-mutating form.
+
+`f!` must be a two-argument mutating function, which writes the result into its
+first argument. The result of `debang` is then `f`, a single-argument
+non-mutating function that allocates and returns the result. Schematically:
+
+```julia
+    f!(out, x) -> f(x)
+```
+
+When the type, size and shape of `out` is the same as those of `x`, it is enough
+to supply just `f!`. When `f` is called, output will be allocated as `similar(x)`.
+
+When the type, size and/or shape of `out` are different from those of `x`, then
+an example instance of the correct type with the correct size and shape for the
+output must be supplied, as debang's `ex` argument. When `f` is called, output
+will be allocated as `similar(ex)`.
+
+(While the type of F is known at compile time, the size and shape are typically
+runtime properties, not encoded into the type. For example, arrays have the
+number of dimensions encoded into the type, but the length of each dimension
+is defined at run time, when an instance is created.)
+
+# Etymology
+
+By convention, mutating functions are marked with an exclamation mark, a.k.a.
+bang. Debanging takes away the bang.
+"""
 function debang(f!, ex=nothing)
     if ex === nothing
         function f(x)
@@ -97,34 +137,12 @@ function debang(f!, ex=nothing)
     return f
 end
 
-# function debang(f!)
-#     # Adapted from
-#     # https://white.ucc.asn.au/2018/10/03/Dispatch,-Traits-and-Metaprogramming-Over-Reflection.html
-#     arg1type(f::Function) = map(arg1type, methods(f)) # check each method of function
-#     arg1type(m::Method) = arg1type(m.sig)
-#     arg1type(x::Any) = throw(x, ArgumentError("unsupported argument type"))
-#     arg1type(::Type{Tuple{F, T1, VarArg{Any}}}) where {F, T1} = T1
-#
-#     arg2type(f::Function) = map(arg2type, methods(f)) # check each method of function
-#     arg2type(m::Method) = arg2type(m.sig)
-#     arg2type(x::Any) = throw(x, ArgumentError("unsupported argument type"))
-#     arg2type(::Type{Tuple{F, T1, T2, VarArg{Any}}}) where {F, T1, T2} = T2
-#
-#     mm = collect(methods(f!))
-#     if length(mm) > 1
-#         throw(ArgumentError(f!, "debang is only implemented for functions with a single method"))
-#     end
-#     themethod = mm[1]
-#
-#     T = arg1type(themethod)
-#     function f(x)
-#         out = similar(T)  # can't work, required information not present in T alone.
-#         f!(out, x)
-#         return out
-#     end
-#     return f
-# end
+"""
+    integrate_material!(material::Chaboche)
 
+Integrate one timestep. The input `material` represents the problem state at the
+end of the previous timestep.
+"""
 function integrate_material!(material::Chaboche)
     p = material.parameters
     v = material.variables
@@ -190,6 +208,30 @@ function integrate_material!(material::Chaboche)
     material.variables_new = variables_new
 end
 
+"""
+    create_nonlinear_system_of_equations(material::Chaboche)
+
+Create and return an instance of the equation system for the delta form of the
+evolution equations.
+
+The input `material` represents the problem state at the end of the previous
+timestep. The created equation system will hold its own copy of that state.
+
+The equation system is represented as a mutating function that computes the
+residual:
+
+```julia
+    g!(F::V, x::V) where V <: AbstractVector{Real}
+```
+
+Both `F` (output) and `x` (input) are length-19 vectors containing
+[σ, R, X1, X2], in that order. The tensor quantities σ, X1, X2 are
+encoded in Voigt format.
+
+The function `g!` is intended to be handed over to `nlsolve`.
+
+Used internally for computing the plastic contribution in `integrate_material!`.
+"""
 function create_nonlinear_system_of_equations(material::Chaboche)
     p = material.parameters
     v = material.variables
