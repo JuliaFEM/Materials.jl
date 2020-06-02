@@ -17,7 +17,7 @@ end
 
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
-    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    strain :: Symm2 = zero(Symm2{Float64})
 end
 
 @with_kw struct ChabocheParameterState <: AbstractMaterialState
@@ -35,13 +35,13 @@ end
 end
 
 @with_kw struct ChabocheVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    X1 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    X2 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    stress :: Symm2 = zero(Symm2{Float64})
+    X1 :: Symm2 = zero(Symm2{Float64})
+    X2 :: Symm2 = zero(Symm2{Float64})
+    plastic_strain :: Symm2 = zero(Symm2{Float64})
     cumeq :: Float64 = zero(Float64)
     R :: Float64 = zero(Float64)
-    jacobian :: SymmetricTensor{4,3} = zero(SymmetricTensor{4,3,Float64})
+    jacobian :: Symm4 = zero(Symm4{Float64})
 end
 
 @with_kw mutable struct Chaboche <: AbstractMaterial
@@ -55,7 +55,7 @@ end
 
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
-    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    strain :: Symm2 = zero(Symm2{Float64})
 end
 
 @with_kw struct IdealPlasticParameterState <: AbstractMaterialState
@@ -65,8 +65,8 @@ end
 end
 
 @with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    stress :: Symm2 = zero(Symm2{Float64})
+    plastic_strain :: Symm2 = zero(Symm2{Float64})
     cumeq :: Float64 = zero(Float64)
 end
 
@@ -111,7 +111,7 @@ mat2 = IdealPlastic()
 function isotropic_elasticity_tensor(lambda, mu)
     delta(i,j) = i==j ? 1.0 : 0.0
     g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
-    jacobian = SymmetricTensor{4, 3, Float64}(g)
+    jacobian = Symm4{Float64}(g)
     return jacobian
 end
 
@@ -143,10 +143,10 @@ function integrate_material!(material::Chaboche)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
 
-        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
+        stress = fromvoigt(Symm2{Float64}, @view x[1:6])
         R = x[7]
-        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
-        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
+        X1 = fromvoigt(Symm2{Float64}, @view x[8:13])
+        X2 = fromvoigt(Symm2{Float64}, @view x[14:19])
         seff = stress - X1 - X2
         seff_dev = dev(seff)
         f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
@@ -165,7 +165,7 @@ function integrate_material!(material::Chaboche)
         drdx = ForwardDiff.jacobian(residuals, x)
         drde = zeros((length(x),6))
         drde[1:6, 1:6] = -tovoigt(jacobian)
-        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx\drde)[1:6, 1:6])
+        jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
     variables_new = ChabocheVariableState(stress = stress,
                                           X1 = X1,
@@ -193,10 +193,10 @@ function create_nonlinear_system_of_equations(material::Chaboche)
 
     function g!(F, x::Vector{T}) where {T} # System of non-linear equations
         jacobian = isotropic_elasticity_tensor(lambda, mu)
-        stress_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
+        stress_ = fromvoigt(Symm2{T}, @view x[1:6])
         R_ = x[7]
-        X1_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[8:13])
-        X2_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[14:19])
+        X1_ = fromvoigt(Symm2{T}, @view x[8:13])
+        X2_ = fromvoigt(Symm2{T}, @view x[14:19])
 
         seff = stress_ - X1_ - X2_
         seff_dev = dev(seff)
@@ -235,7 +235,7 @@ function simple_integration_test()
                                         Q = 50.0,
                                         b = 0.1)
 
-    dstrain_dtime = fromvoigt(SymmetricTensor{2,3,Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
+    dstrain_dtime = fromvoigt(Symm2{Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
     ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
     chabmat = Chaboche(parameters = parameters, ddrivers = ddrivers)
     @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
@@ -289,7 +289,7 @@ function test_chaboche()
     s33s = [chabmat.variables.stress[3,3]]
     for i=2:length(ts)
         dtime = ts[i]-ts[i-1]
-        dstrain = fromvoigt(SymmetricTensor{2,3,Float64}, strains[i]-strains[i-1]; offdiagscale=2.0)
+        dstrain = fromvoigt(Symm2{Float64}, strains[i]-strains[i-1]; offdiagscale=2.0)
         chabmat.ddrivers = ChabocheDriverState(time = dtime, strain = dstrain)
         integrate_material!(chabmat)
         update!(chabmat)
@@ -320,7 +320,7 @@ function simple_integration_test_fd_tangent()
                                         Q = 50.0,
                                         b = 0.1)
 
-    dstrain_dtime = fromvoigt(SymmetricTensor{2,3,Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
+    dstrain_dtime = fromvoigt(Symm2{Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
     ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
     chabmat = Chaboche(parameters = parameters, ddrivers = ddrivers)
 
@@ -400,7 +400,7 @@ function simple_integration_test_fd_tangent2()
                                         Q = 50.0,
                                         b = 0.1)
 
-    dstrain_dtime = fromvoigt(SymmetricTensor{2,3,Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
+    dstrain_dtime = fromvoigt(Symm2{Float64}, 1e-3*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0]; offdiagscale=2.0)
     ddrivers = ChabocheDriverState(time = 0.25, strain = 0.25*dstrain_dtime)
     chabmat = Chaboche(parameters = parameters, ddrivers = ddrivers)
     integrate_material!(chabmat)

@@ -9,23 +9,23 @@ abstract type AbstractMaterialState end
 end
 
 struct SomeState <: AbstractMaterialState
-   stress::SymmetricTensor{2,3,Float64}
+   stress::Symm2{Float64}
 end
 
 
-state = SomeState(SymmetricTensor{2,3,Float64}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+state = SomeState(Symm2{Float64}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
 
 N = 1000
 function bench_state(N)
-   state = SomeState(SymmetricTensor{2,3,Float64}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+   state = SomeState(Symm2{Float64}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
    for i in 1:N
-      dstate = SomeState(randn(SymmetricTensor{2,3,Float64}))
+      dstate = SomeState(randn(Symm2{Float64}))
       state = state + dstate
    end
    return state
 end
 
-# println("Benchmark State{SymmetricTensor{2,3,Float64}}")
+# println("Benchmark State{Symm2{Float64}}")
 # @btime bench_state(N)
 
 struct AnotherState <: AbstractMaterialState
@@ -38,21 +38,21 @@ struct AnotherState <: AbstractMaterialState
    R::Float64
 end
  function bench_chaboche_style_state(N)
-   stress = zero(SymmetricTensor{2,3})
-   strain = zero(SymmetricTensor{2,3})
-   backstress1 = zero(SymmetricTensor{2,3})
-   backstress2 = zero(SymmetricTensor{2,3})
-   plastic_strain = zero(SymmetricTensor{2,3})
+   stress = zero(Symm2)
+   strain = zero(Symm2)
+   backstress1 = zero(Symm2)
+   backstress2 = zero(Symm2)
+   plastic_strain = zero(Symm2)
    cumeq = 0.0
    R = 0.0
    state = AnotherState(stress, strain, backstress1,
                         backstress2, plastic_strain, cumeq, R)
    for i in 1:N
-      dstress = randn(SymmetricTensor{2,3})
-      dstrain = randn(SymmetricTensor{2,3})
-      dbackstress1 = randn(SymmetricTensor{2,3})
-      dbackstress2 = randn(SymmetricTensor{2,3})
-      dplastic_strain = randn(SymmetricTensor{2,3})
+      dstress = randn(Symm2)
+      dstrain = randn(Symm2)
+      dbackstress1 = randn(Symm2)
+      dbackstress2 = randn(Symm2)
+      dplastic_strain = randn(Symm2)
       dcumeq = norm(dplastic_strain)
       dR = randn()
       dstate = AnotherState(dstress, dstrain, dbackstress1,

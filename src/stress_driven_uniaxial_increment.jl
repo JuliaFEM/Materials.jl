@@ -7,7 +7,7 @@ function stress_driven_uniaxial_increment!(material, dstress11,
     stress0 = tovoigt(material.variables.stress)
     for i=1:max_iter
         material.ddrivers.time = dt
-        material.ddrivers.strain = fromvoigt(SymmetricTensor{2,3,Float64}, dstrain; offdiagscale=2.0)
+        material.ddrivers.strain = fromvoigt(Symm2{Float64}, dstrain; offdiagscale=2.0)
         integrate_material!(material)
         stress = tovoigt(material.variables_new.stress)
         dstress = stress - stress0

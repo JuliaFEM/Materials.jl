@@ -1,12 +1,6 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-"""Alias for symmetric tensor type of rank 2, dimension 3."""
-const Symm2{T} = SymmetricTensor{2,3,T}
-
-"""Alias for symmetric tensor type of rank 4, dimension 3."""
-const Symm4{T} = SymmetricTensor{4,3,T}
-
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
     strain :: Symm2 = zero(Symm2{Float64})
@@ -46,28 +40,6 @@ end
 end
 
 """
-    lame(E, ν)
-
-Convert the elastic parameters (E, ν) to the Lamé parameters (μ, λ). Isotropic material.
-"""
-@inline function lame(E::Real, ν::Real)
-    μ = E / (2.0 * (1.0 + nu))
-    λ = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
-    return μ, λ
-end
-
-"""
-    delame(E, ν)
-
-Convert the Lamé parameters (μ, λ) to the elastic parameters (E, ν). Isotropic material.
-"""
-@inline function delame(μ::Real, λ::Real)
-    E = μ * (3.0 * λ + 2.0 * μ) / (λ + μ)
-    ν = λ / (2.0 * (λ + μ))
-    return E, ν
-end
-
-"""
     state_to_vector(σ::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
 
 Marshal the problem state into a `Vector`. Adaptor for `nlsolve`.
@@ -89,61 +61,13 @@ Unmarshal the problem state from a `Vector`. Adaptor for `nlsolve`.
     return σ, R, X1, X2
 end
 
-"""
-    debang(f!, ex=nothing)
-
-Take away the bang; i.e. convert a mutating function into non-mutating form.
-
-`f!` must be a two-argument mutating function, which writes the result into its
-first argument. The result of `debang` is then `f`, a single-argument
-non-mutating function that allocates and returns the result. Schematically:
-
-```julia
-    f!(out, x) -> f(x)
-```
-
-When the type, size and shape of `out` is the same as those of `x`, it is enough
-to supply just `f!`. When `f` is called, output will be allocated as `similar(x)`.
-
-When the type, size and/or shape of `out` are different from those of `x`, then
-an example instance of the correct type with the correct size and shape for the
-output must be supplied, as debang's `ex` argument. When `f` is called, output
-will be allocated as `similar(ex)`.
-
-(While the type of F is known at compile time, the size and shape are typically
-runtime properties, not encoded into the type. For example, arrays have the
-number of dimensions encoded into the type, but the length of each dimension
-is defined at run time, when an instance is created.)
-
-# Etymology
-
-By convention, mutating functions are marked with an exclamation mark, a.k.a.
-bang. Debanging takes away the bang.
-"""
-function debang(f!, ex=nothing)
-    if ex === nothing
-        function f(x)
-            out = similar(x)
-            f!(out, x)
-            return out
-        end
-    else
-        function f(x)
-            out = similar(ex)
-            f!(out, x)
-            return out
-        end
-    end
-    return f
-end
-
 function integrate_material!(material::Chaboche)
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
     d = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = p
-    mu, lambda = lame(E, nu)
+    lambda, mu = lame(E, nu)
 
     @unpack strain, time = d
     dstrain = dd.strain
@@ -232,7 +156,7 @@ function create_nonlinear_system_of_equations(material::Chaboche)
     dd = material.ddrivers
     d = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b = p
-    mu, lambda = lame(E, nu)
+    lambda, mu = lame(E, nu)
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).

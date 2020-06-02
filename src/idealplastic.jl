@@ -3,7 +3,7 @@
 
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
-    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    strain :: Symm2 = zero(Symm2{Float64})
 end
 
 @with_kw struct IdealPlasticParameterState <: AbstractMaterialState
@@ -13,10 +13,10 @@ end
 end
 
 @with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    stress :: Symm2 = zero(Symm2{Float64})
+    plastic_strain :: Symm2 = zero(Symm2{Float64})
     cumeq :: Float64 = zero(Float64)
-    jacobian :: SymmetricTensor{4,3} = zero(SymmetricTensor{4,3,Float64})
+    jacobian :: Symm4 = zero(Symm4{Float64})
 end
 
 @with_kw mutable struct IdealPlastic <: AbstractMaterial
@@ -59,8 +59,8 @@ function integrate_material!(material::IdealPlastic)
 
         stress -= dcontract(jacobian, dp*n)
         delta(i,j) = i==j ? 1.0 : 0.0
-        II = SymmetricTensor{4,3}((i,j,k,l) -> 0.5*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k)))
-        P = II - 1.0/3.0*SymmetricTensor{4,3}((i,j,k,l) -> delta(i,j)*delta(k,l))
+        II = Symm4((i,j,k,l) -> 0.5*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k)))
+        P = II - 1.0/3.0*Symm4((i,j,k,l) -> delta(i,j)*delta(k,l))
         EE = II + dp*dcontract(jacobian, 1.5*P/R0 - otimes(n,n)/R0)
         ED = dcontract(inv(EE),jacobian)
         jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED))/dcontract(dcontract(n, ED), n)

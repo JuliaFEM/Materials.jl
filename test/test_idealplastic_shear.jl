@@ -35,7 +35,7 @@ for i=2:length(times)
     dtime = times[i]-times[i-1]
     dstrain31 = loads[i]-loads[i-1]
     dstrain = [0.0, 0.0, 0.0, 0.0, 0.0, dstrain31]
-    dstrain_ = fromvoigt(SymmetricTensor{2,3,Float64}, dstrain; offdiagscale=2.0)
+    dstrain_ = fromvoigt(Symm2{Float64}, dstrain; offdiagscale=2.0)
     ddrivers = IdealPlasticDriverState(time = dtime, strain = dstrain_)
     #mat.dtime = dtime
     #mat.dstrain = dstrain

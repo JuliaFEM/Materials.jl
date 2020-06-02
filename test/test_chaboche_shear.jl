@@ -60,7 +60,7 @@ for i=2:length(times)
     dstrain = [0.0, 0.0, 0.0, 0.0, 0.0, dstrain31]
     # mat.dtime = dtime
     # mat.dstrain = dstrain
-    dstrain_ = fromvoigt(SymmetricTensor{2,3,Float64}, dstrain; offdiagscale=2.0)
+    dstrain_ = fromvoigt(Symm2{Float64}, dstrain; offdiagscale=2.0)
     mat.ddrivers = ChabocheDriverState(time = dtime, strain = dstrain_)
     integrate_material!(mat)
     # mat.time += mat.dtime

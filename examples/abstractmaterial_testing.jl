@@ -67,9 +67,9 @@ function bench_tensor()
 end
 function bench_symtensor()
     # Random walk test
-    var = Variable(SymmetricTensor{2, 3}([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
+    var = Variable(Symm2([1.0, 2.0, 3.0, 4.0, 5.0, 6.0]))
     for i in 1:N
-        var.dvalue += randn(SymmetricTensor{2,3,Float64})
+        var.dvalue += randn(Symm2{Float64})
         update!(var)
     end
 end
@@ -106,21 +106,21 @@ function update!(state::T) where {T<:AbstractVariableState}
 end
 
 function bench_chaboche_style_variablestate()
-    stress = Variable(zero(SymmetricTensor{2,3}))
-    strain = Variable(zero(SymmetricTensor{2,3}))
-    backstress1 = Variable(zero(SymmetricTensor{2,3}))
-    backstress2 = Variable(zero(SymmetricTensor{2,3}))
-    plastic_strain = Variable(zero(SymmetricTensor{2,3}))
+    stress = Variable(zero(Symm2))
+    strain = Variable(zero(Symm2))
+    backstress1 = Variable(zero(Symm2))
+    backstress2 = Variable(zero(Symm2))
+    plastic_strain = Variable(zero(Symm2))
     cumeq = Variable(0.0)
     R = Variable(0.0)
     state = VariableState(stress, strain, backstress1,
                         backstress2, plastic_strain, cumeq, R)
     for i in 1:N
-        state.stress.dvalue = randn(SymmetricTensor{2,3})
-        state.strain.dvalue = randn(SymmetricTensor{2,3})
-        state.backstress1.dvalue = randn(SymmetricTensor{2,3})
-        state.backstress2.dvalue = randn(SymmetricTensor{2,3})
-        state.plastic_strain.dvalue = randn(SymmetricTensor{2,3})
+        state.stress.dvalue = randn(Symm2)
+        state.strain.dvalue = randn(Symm2)
+        state.backstress1.dvalue = randn(Symm2)
+        state.backstress2.dvalue = randn(Symm2)
+        state.plastic_strain.dvalue = randn(Symm2)
         state.cumeq.dvalue = norm(state.plastic_strain.dvalue)
         state.R.dvalue = randn()
         update!(state)

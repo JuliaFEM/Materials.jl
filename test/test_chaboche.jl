@@ -37,7 +37,7 @@ chabmat = Chaboche(parameters = parameters)
 s33s = [chabmat.variables.stress[3,3]]
 for i=2:length(ts)
     dtime = ts[i]-ts[i-1]
-    dstrain = fromvoigt(SymmetricTensor{2,3,Float64}, strains[i]-strains[i-1]; offdiagscale=2.0)
+    dstrain = fromvoigt(Symm2{Float64}, strains[i]-strains[i-1]; offdiagscale=2.0)
     chabmat.ddrivers = ChabocheDriverState(time = dtime, strain = dstrain)
     integrate_material!(chabmat)
     update_material!(chabmat)

@@ -67,18 +67,8 @@ end
 
 export integrate_material!, update_material!, reset_material!
 
-"""
-    isotropic_elasticity_tensor(lambda, mu)
-
-Compute the elasticity tensor (rank 4, symmetric) for an isotropic material
-having the Lamé parameters `lambda` and `mu`.
-"""
-function isotropic_elasticity_tensor(lambda, mu)
-    delta(i,j) = i==j ? 1.0 : 0.0
-    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l) + delta(i,l)*delta(j,k))
-    jacobian = SymmetricTensor{4, 3, Float64}(g)
-    return jacobian
-end
+include("MaterialsUtils.jl")
+export Symm2, Symm4, lame, delame, isotropic_elasticity_tensor, debang
 
 include("idealplastic.jl")
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
