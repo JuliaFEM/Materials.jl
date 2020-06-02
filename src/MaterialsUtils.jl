@@ -90,3 +90,13 @@ function debang(f!, ex=nothing)
     end
     return f
 end
+
+# Various rank-4 unit tensors, for documentation.
+# Let A be a rank-2 tensor, and I the rank-2 unit tensor.
+#
+# II = Symm4{Float64}((i,j,k,l) -> delta(i,k)*delta(j,l))  # II : A = A
+# IT = Symm4{Float64}((i,j,k,l) -> delta(i,l)*delta(j,k))  # IT : A = transpose(A)
+# IS = Symm4{Float64}((i,j,k,l) -> 0.5*(II + IT))  # symmetric
+# IA = Symm4{Float64}((i,j,k,l) -> 0.5*(II - IT))  # screw-symmetric
+# IV = 1.0/3.0 * Symm4{Float64}((i,j,k,l) -> delta(i,j)*delta(k,l))  # volumetric, IV = (1/3) I ⊗ I
+# ID = IS - IV  # deviatoric

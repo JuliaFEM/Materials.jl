@@ -40,27 +40,32 @@ end
 end
 
 """
-    state_to_vector(σ::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+    state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
 
-Marshal the problem state into a `Vector`. Adaptor for `nlsolve`.
+Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
 """
-@inline function state_to_vector(σ::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
-    return [tovoigt(σ), R, tovoigt(X1), tovoigt(X2)]
+@inline function state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+    return [tovoigt(sigma), R, tovoigt(X1), tovoigt(X2)]
 end
 
 """
     state_from_vector(x::AbstractVector{Real})
 
-Unmarshal the problem state from a `Vector`. Adaptor for `nlsolve`.
+Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
 """
 @inline function state_from_vector(x::AbstractVector{Real})
-    σ = fromvoigt(Symm2{S}, @view x[1:6])
+    sigma = fromvoigt(Symm2{S}, @view x[1:6])
     R = x[7]
     X1 = fromvoigt(Symm2{S}, @view x[8:13])
     X2 = fromvoigt(Symm2{S}, @view x[14:19])
-    return σ, R, X1, X2
+    return sigma, R, X1, X2
 end
 
+"""
+    integrate_material!(material::Chaboche)
+
+Chaboche material with two backstresses. Both kinematic and isotropic hardening.
+"""
 function integrate_material!(material::Chaboche)
     p = material.parameters
     v = material.variables
@@ -111,8 +116,6 @@ function integrate_material!(material::Chaboche)
         # the other factor we will have to supply manually.
         drdx = ForwardDiff.jacobian(debang(g!), x)  # Array{19, 19}
         drde = zeros((length(x),6))                 # Array{19, 6}
-        # We are only interested in dσ/dε, so the rest of drde can be left as zeros.
-        # TODO: where does the minus sign come from?
         drde[1:6, 1:6] = -tovoigt(jacobian)  # (negative of the) elastic Jacobian. Follows from the defn. of g!.
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
@@ -145,8 +148,8 @@ residual:
 ```
 
 Both `F` (output) and `x` (input) are length-19 vectors containing
-[σ, R, X1, X2], in that order. The tensor quantities σ, X1, X2 are
-encoded in Voigt format.
+[sigma, R, X1, X2], in that order. The tensor quantities sigma, X1,
+X2 are encoded in Voigt format.
 
 The function `g!` is intended to be handed over to `nlsolve`.
 """
