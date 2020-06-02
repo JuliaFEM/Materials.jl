@@ -67,7 +67,7 @@ end
 
 export integrate_material!, update_material!, reset_material!
 
-include("MaterialsUtils.jl")
+include("utilities.jl")
 export Symm2, Symm4, lame, delame, isotropic_elasticity_tensor, debang
 
 include("idealplastic.jl")
