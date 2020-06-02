@@ -8,6 +8,15 @@ using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
 
+"""
+    :+(state::T, dstate::T) where {T <: AbstractMaterialState}
+
+Addition for material states.
+
+Given two material states `state` and `dstate` of type `T`, add each field of
+`dstate` into the corresponding field of `state`. Return the resulting material
+state.
+"""
 @generated function Base.:+(state::T, dstate::T) where {T <: AbstractMaterialState}
    expr = [:(state.$p + dstate.$p) for p in fieldnames(T)]
    return :(T($(expr...)))
@@ -15,10 +24,25 @@ end
 
 export AbstractMaterial, AbstractMaterialState
 
+"""
+    integrate_material!(material::M) where {M<:AbstractMaterial}
+
+Integrate one timestep. The input `material` represents the problem state at the
+end of the previous timestep.
+
+Abstract method. Must be implemented for each material type. When integration is
+done, the method must update the `material` argument to have the new state.
+"""
 function integrate_material!(material::M) where {M<:AbstractMaterial}
     error("One needs to define how to integrate material $M!")
 end
 
+"""
+    update_material!(material::M) where {M <: AbstractMaterial}
+
+In `material`, add `ddrivers` into `drivers`, `dparameters` into `parameters`,
+and replace `variables` by `variables_new`. Then `reset_material!`.
+"""
 function update_material!(material::M) where {M <: AbstractMaterial}
     material.drivers += material.ddrivers
     material.parameters += material.dparameters
@@ -27,6 +51,13 @@ function update_material!(material::M) where {M <: AbstractMaterial}
     return nothing
 end
 
+"""
+    reset_material!(material::M) where {M <: AbstractMaterial}
+
+In `material`, zero out `ddrivers`, `dparameters` and `variables_new`.
+
+Used internally by `update_material!`.
+"""
 function reset_material!(material::M) where {M <: AbstractMaterial}
     material.ddrivers = typeof(material.ddrivers)()
     material.dparameters = typeof(material.dparameters)()
@@ -36,9 +67,15 @@ end
 
 export integrate_material!, update_material!, reset_material!
 
+"""
+    isotropic_elasticity_tensor(lambda, mu)
+
+Compute the elasticity tensor (rank 4, symmetric) for an isotropic material
+having the Lamé parameters `lambda` and `mu`.
+"""
 function isotropic_elasticity_tensor(lambda, mu)
     delta(i,j) = i==j ? 1.0 : 0.0
-    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l)+delta(i,l)*delta(j,k))
+    g(i,j,k,l) = lambda*delta(i,j)*delta(k,l) + mu*(delta(i,k)*delta(j,l) + delta(i,l)*delta(j,k))
     jacobian = SymmetricTensor{4, 3, Float64}(g)
     return jacobian
 end

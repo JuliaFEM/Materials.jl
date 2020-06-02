@@ -137,12 +137,6 @@ function debang(f!, ex=nothing)
     return f
 end
 
-"""
-    integrate_material!(material::Chaboche)
-
-Integrate one timestep. The input `material` represents the problem state at the
-end of the previous timestep.
-"""
 function integrate_material!(material::Chaboche)
     p = material.parameters
     v = material.variables
@@ -212,12 +206,14 @@ end
     create_nonlinear_system_of_equations(material::Chaboche)
 
 Create and return an instance of the equation system for the delta form of the
-evolution equations.
+evolution equations of the Chaboche material.
+
+Used internally for computing the plastic contribution in `integrate_material!`.
 
 The input `material` represents the problem state at the end of the previous
 timestep. The created equation system will hold its own copy of that state.
 
-The equation system is represented as a mutating function that computes the
+The equation system is represented as a mutating function `g!` that computes the
 residual:
 
 ```julia
@@ -229,8 +225,6 @@ Both `F` (output) and `x` (input) are length-19 vectors containing
 encoded in Voigt format.
 
 The function `g!` is intended to be handed over to `nlsolve`.
-
-Used internally for computing the plastic contribution in `integrate_material!`.
 """
 function create_nonlinear_system_of_equations(material::Chaboche)
     p = material.parameters
