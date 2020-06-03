@@ -27,11 +27,15 @@ export AbstractMaterial, AbstractMaterialState
 """
     integrate_material!(material::M) where {M<:AbstractMaterial}
 
-Integrate one timestep. The input `material` represents the problem state at the
-end of the previous timestep.
+Integrate one timestep. The input `material.variables` represents the old
+problem state.
 
 Abstract method. Must be implemented for each material type. When integration is
-done, the method must update the `material` argument to have the new state.
+done, the method **must** write the new state into `material.variables_new`.
+
+**Do not** write into `material.variables`; actually committing the timestep
+(i.e. accepting that one step of time evolution and applying it permanently)
+is the job of `update_material!`.
 """
 function integrate_material!(material::M) where {M<:AbstractMaterial}
     error("One needs to define how to integrate material $M!")
@@ -40,8 +44,11 @@ end
 """
     update_material!(material::M) where {M <: AbstractMaterial}
 
-In `material`, add `ddrivers` into `drivers`, `dparameters` into `parameters`,
-and replace `variables` by `variables_new`. Then `reset_material!`.
+Commit the result of `integrate_material!`.
+
+In `material`, we add `ddrivers` into `drivers`, `dparameters` into
+`parameters`, and replace `variables` by `variables_new`. Then we
+automatically invoke `reset_material!`.
 """
 function update_material!(material::M) where {M <: AbstractMaterial}
     material.drivers += material.ddrivers
@@ -54,7 +61,9 @@ end
 """
     reset_material!(material::M) where {M <: AbstractMaterial}
 
-In `material`, zero out `ddrivers`, `dparameters` and `variables_new`.
+In `material`, we zero out `ddrivers`, `dparameters` and `variables_new`. This
+clears out the tentative state produced when a timestep has been computed, but
+has not yet been committed.
 
 Used internally by `update_material!`.
 """
