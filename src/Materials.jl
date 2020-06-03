@@ -88,13 +88,7 @@ export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableSt
 # include("viscoplastic.jl")
 # export ViscoPlastic
 
-include("uniaxial_increment.jl")
-export uniaxial_increment!
-
-include("biaxial_increment.jl")
-export biaxial_increment!
-
-include("stress_driven_uniaxial_increment.jl")
-export stress_driven_uniaxial_increment!
+include("increments.jl")
+export uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
 
 end
