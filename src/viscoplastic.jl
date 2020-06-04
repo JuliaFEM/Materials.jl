@@ -5,184 +5,202 @@
 #   http://www.solid.iei.liu.se/Education/TMHL55/TMHL55_lp1_2010/lecture_notes/plasticity_flow_rule_isotropic_hardening.pdf
 #   http://mms.ensmp.fr/msi_paris/transparents/Georges_Cailletaud/2013-GC-plas3D.pdf
 
-using LinearAlgebra
+using LinearAlgebra  # in Julia 1.0+, the I matrix lives here.
 using NLsolve
-
-mutable struct ViscoPlastic <: AbstractMaterial
-    # Material parameters
-    youngs_modulus :: Float64
-    poissons_ratio :: Float64
-    yield_stress :: Float64
-    potential :: Symbol
-    params :: Array{Float64, 1}
-
-    # Internal state variables
-    plastic_strain :: Vector{Float64}
-    dplastic_strain :: Vector{Float64}
-    plastic_multiplier :: Float64
-    dplastic_multiplier :: Float64
-
-end
 
 POTENTIAL_FUNCTIONS = [:norton]
 
-function ViscoPlastic(potential::Symbol, params :: Array{Float64,1})
-    if !any(POTENTIAL_FUNCTIONS .== potential)
-        error("Potential $potential not found!")
-    end
-    youngs_modulus = 0.0
-    poissons_ratio = 0.0
-    yield_stress = 0.0
-    plastic_strain = zeros(6)
-    dplastic_strain = zeros(6)
-    plastic_multiplier = 0.0
-    dplastic_multiplier = 0.0
-    dt = 0.0
-    return ViscoPlastic(youngs_modulus, poissons_ratio, yield_stress, potential, params,
-                        plastic_strain, dplastic_strain, plastic_multiplier,
-                        dplastic_multiplier)
+# TODO: To conform with the API of the other models, viscoplastic still needs:
+#   - drivers, ddrivers, variables, variables_new, parameters, dparameters
+#   - ViscoPlasticDriverState: maybe time, strain?
+#   - ViscoPlasticParameterState: youngs_modulus, poissons_ratio, yield_stress, potential, params
+#   - ViscoPlasticVariableState: stress, plastic_strain, cumeq, jacobian
+@with_kw mutable struct ViscoPlastic <: AbstractMaterial
+    # Material parameters
+    youngs_modulus::Float64 = zero(Float64)
+    poissons_ratio::Float64 = zero(Float64)
+    yield_stress::Float64 = zero(Float64)
+    potential::Symbol = :norton
+    # Parameters for potential. If potential=:norton, this is [K, n].
+    params::Vector{Float64} = [180.0e3, 0.92]
+    # Internal state variables
+    plastic_strain::Vector{Float64} = zeros(6)  # TODO: never used?
+    dplastic_strain::Vector{Float64} = zeros(6)
+    plastic_multiplier::Float64 = zero(Float64)  # TODO: never used, remove?
+    dplastic_multiplier::Float64 = zero(Float64)  # TODO: never used, remove?
+    # https://mauro3.github.io/Parameters.jl/dev/manual/
+    @assert potential in POTENTIAL_FUNCTIONS
 end
 
-function ViscoPlastic()
-    youngs_modulus = 0.0
-    poissons_ratio = 0.0
-    yield_stress = 0.0
-    plastic_strain = zeros(6)
-    dplastic_strain = zeros(6)
-    plastic_multiplier = 0.0
-    dplastic_multiplier = 0.0
-    dt = 0.0
-    potential = :norton
-    params = [180.0e3, 0.92]
-    return ViscoPlastic(youngs_modulus, poissons_ratio, yield_stress, potential, params,
-                        plastic_strain, dplastic_strain, plastic_multiplier,
-                        dplastic_multiplier)
+# TODO: Rewrite this module to use regular tensor notation.
+# Could then just use the functions from the Tensors package.
+"""Double contraction of rank-2 tensors stored in an array format."""
+function dcontract(x::A, y::A) where A <: AbstractArray{<:Number, 2}
+    return sum(x .* y)
 end
 
-""" Double contraction
+"""Deviatoric part of rank-2 tensor.
+
+Input in Voigt format. Output as a 3×3 array`.
+
+Order of components is:
+
+    t = [v[1] v[4] v[6];
+         v[4] v[2] v[5];
+         v[6] v[5] v[3]]
 """
-function double_contraction(x,y)
-    return sum(x.*y)
+function dev(v::AbstractVector{<:Number})
+    t = [v[1] v[4] v[6];
+         v[4] v[2] v[5];
+         v[6] v[5] v[3]]
+    # TODO: Unify storage order with the Julia standard:
+    #   fromvoigt(SymmetricTensor{2,3}, Array(1:6))
+    #
+    #   1 6 5
+    #   6 2 4
+    #   5 4 3
+    #
+    # Changing this affects how to read sol_mat in dNortondStress.
+    return t - 1/3 * tr(t) * I
 end
 
-""" Deviatoric stress tensor
-"""
-function deviatoric_stress(stress)
-    stress_tensor = [   stress[1] stress[4] stress[6];
-                        stress[4] stress[2] stress[5];
-                        stress[6] stress[5] stress[3]]
-    stress_dev = stress_tensor - 1/3 * tr(stress_tensor) * Matrix(1.0I, 3, 3)
-    return stress_dev
-end
-
-function J_2_stress(stress)
-    s = deviatoric_stress(stress)
-    return 1/2 * double_contraction(s,s)
-end
-
-""" Equivalent stress
-"""
-function equivalent_stress(stress)
-    J_2 = J_2_stress(stress)
+"""Equivalent stress."""
+function equivalent_stress(stress::AbstractVector{<:Number})
+    s = dev(stress)
+    J_2 = 1/2 * dcontract(s,s)
     return sqrt(3 * J_2)
 end
 
-""" Von mises yield function
-"""
-function von_mises_yield(stress, stress_y)
-    return equivalent_stress(stress) - stress_y
-end
+"""Norton rule.
 
-""" Norton rule
+`params = [K, n]`.
+
+`f` is the yield function.
+
+`stress` is passed through to `f` as its only argument,
+so its storage format must be whatever `f` expects.
 """
-function norton_plastic_potential(stress, params, f)
+function norton_plastic_potential(stress, params::AbstractVector{<:Number}, f::Function)
     K = params[1]
     n = params[2]
-    J = f(stress)
-    return K/(n+1) * (J / K) ^ (n + 1)
+    return K/(n+1) * (f(stress) / K)^(n + 1)
 end
 
-function bingham_plastic_potential(stress, params, f)
+"""Bingham rule.
+
+`params = [eta]`.
+
+`f` and `stress` like in `norton_plastic_potential`.
+"""
+function bingham_plastic_potential(stress, params::AbstractVector{<:Number}, f::Function)
     eta = params[1]
-    return 0.5 * (f(stress) / eta) ^2
+    return 0.5 * (f(stress) / eta)^2
 end
 
-""" Analytically derivated norton rule
-"""
-function dNortondStress(stress, params, f)
-    K = params[1]
-    n = params[2]
-    f_ = f(stress)
-    stress_v = equivalent_stress(stress)
-    stress_dev_vec = deviatoric_stress(stress)
-    sol_mat = (f_ / K) ^ n * 3 / 2 * stress_dev_vec / stress_v
-    return [sol_mat[1,1], sol_mat[2,2], sol_mat[3,3],
-            2*sol_mat[1,2], 2*sol_mat[2,3], 2*sol_mat[1,3]]
+"""Jacobian of the Norton rule."""
+function dNortondStress(stress::AbstractVector{<:Number}, params::AbstractVector{<:Number}, f::Function)
+    # using SymPy
+    # @vars K n s
+    # @symfuns f
+    # norton = K / (n + 1) * (f(s) / K)^(n + 1)
+    # simplify(diff(norton, s))
+    #   --> (f(s) / K)^n df/ds
+    #
+    # ...so this only works if `f` is the von Mises yield function.
+    #
+    # K = params[1]
+    # n = params[2]
+    # stress_v = equivalent_stress(stress)
+    # stress_dev = dev(stress)
+    # sol_mat = (f(stress) / K)^n * 3.0/2.0 * stress_dev / stress_v
+    # return [sol_mat[1,1], sol_mat[2,2], sol_mat[3,3],
+    #         2*sol_mat[1,2], 2*sol_mat[2,3], 2*sol_mat[1,3]]
+
+    # Instead, let's use AD:
+    pot(stress) = norton_plastic_potential(stress, params, f)
+    return ForwardDiff.jacobian(pot, stress)
 end
 
-function find_root(f, df, x; max_iter=50, norm_acc=1e-9)
-    converged = false
-    for i=1:max_iter
-        dx = -df(x) \ f(x)
-        x += dx
-        norm(dx) < norm_acc && (converged = true; break)
-    end
-    converged || error("No convergence in radial return!")
-    return x
-end
-
-function integrate_material!(material::Material{ViscoPlastic})
+function integrate_material!(material::ViscoPlastic)
     mat = material.properties
 
     E = mat.youngs_modulus
     nu = mat.poissons_ratio
+    R0 = mat.yield_stress
     potential = mat.potential
     params = mat.params
-    mu = E/(2.0*(1.0+nu))
-    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    lambda, mu = lame(E, nu)
 
+    # TODO: these fields don't exist!
     stress = material.stress
     strain = material.strain
     dstress = material.dstress
     dstrain = material.dstrain
     dt = material.dtime
-    D = material.jacobian
+    # D = material.jacobian  # TODO: this field doesn't exist!
 
     dedt = dstrain ./ dt
 
-    fill!(D, 0.0)
-    D[1,1] = D[2,2] = D[3,3] = 2.0*mu + lambda
-    D[4,4] = D[5,5] = D[6,6] = mu
-    D[1,2] = D[2,1] = D[2,3] = D[3,2] = D[1,3] = D[3,1] = lambda
+    # This looks like a rank-4 tensor in a Voigt matrix format...?
+    # fill!(D, 0.0)
+    # D[1,1] = D[2,2] = D[3,3] = 2.0*mu + lambda
+    # D[4,4] = D[5,5] = D[6,6] = mu
+    # D[1,2] = D[2,1] = D[2,3] = D[3,2] = D[1,3] = D[3,1] = lambda
+    #
+    # Let's find out. In the REPL:
+    #   S = SymmetricTensor{2, 3}(1:6)
+    #   tovoigt(S)
+    # So the index mapping is:
+    #   Voigt  rank-2
+    #   1      11
+    #   2      22
+    #   3      33
+    #   4      23
+    #   5      13
+    #   6      12
+    # So this is just the isotropic elasticity tensor C:
+    #   Cijkl = λ δij δkl + μ (δik δjl + δil δjk)
+    # with the strain stored in a Voigt format:
+    #   [εxx, εyy, εzz, εyz, εxz, εxy]  (ordering of shear components doesn't matter here)
+    #
+    # So let's just:
+    D = tovoigt(isotropic_elasticity_tensor(lambda, mu))
+
+    """von Mises yield function."""
+    function f(stress::AbstractVector{<:Number})  # stress in Voigt format
+        return equivalent_stress(stress) - R0
+    end
 
     dstress[:] .= D * dedt .* dt
-    stress_tr = stress + dstress
-    f = x -> von_mises_yield(x, mat.yield_stress)
-    yield = f(stress_tr)
+    stress_elastic_trial = stress + dstress
 
-    if yield <= 0
+    if f(stress_elastic_trial) <= 0  # not in plastic region
         fill!(mat.dplastic_strain, 0.0)
-        return nothing
-    else
-        if potential == :norton
-            x0 = vec([dstress; 0.0])
-
-            function g!(F, x)
-                dsigma = x[1:6]
-                F[1:6] = dsigma - D * (dedt - dNortondStress(stress + dsigma, params, f)) .* dt
-                F[end] = von_mises_yield(stress + dsigma, mat.yield_stress)
-            end
-
-            res = nlsolve(g!, x0)
-            dsigma = res.zero[1:6]
-            dstrain_pl = dNortondStress(stress + dsigma, params, f)
-
-        end
-        mat.dplastic_strain = dstrain_pl
-        dstress[:] .= D*(dedt - dstrain_pl) .* dt
         return nothing
     end
 
-    return nothing
+    if potential == :norton
+        pot(stress) -> norton_plastic_potential(stress, params, f)
+    else
+        @assert false  # cannot happen (unless someone mutates the struct contents)
+    end
 
+    dpotdstress(stress) = ForwardDiff.jacobian(pot, stress)
+
+    # The nonlinear equation system, (stuff) = 0
+    function g!(F, x)
+        dsigma = x[1:6]
+        F[1:6] = dsigma - D * (dedt - dpotdstress(stress + dsigma)) .* dt
+        F[end] = f(stress + dsigma)
+    end
+
+    x0 = vec([dstress; 0.0])
+    res = nlsolve(g!, x0, autodiff=:forward)
+    converged(res) || error("Nonlinear system of equations did not converge!")
+    dsigma = res.zero[1:6]
+
+    dstrain_plastic = dpotdstress(stress + dsigma)
+    mat.dplastic_strain = dstrain_plastic
+    dstress[:] .= D * (dedt - dstrain_plastic) .* dt
+    return nothing
 end
