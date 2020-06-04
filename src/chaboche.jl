@@ -49,11 +49,11 @@ Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
 end
 
 """
-    state_from_vector(x::AbstractVector{Real})
+    state_from_vector(x::AbstractVector{<:Real})
 
 Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
 """
-@inline function state_from_vector(x::AbstractVector{Real})
+@inline function state_from_vector(x::AbstractVector{S}) where S <: Real
     sigma = fromvoigt(Symm2{S}, @view x[1:6])
     R = x[7]
     X1 = fromvoigt(Symm2{S}, @view x[8:13])
@@ -144,7 +144,7 @@ The equation system is represented as a mutating function `g!` that computes the
 residual:
 
 ```julia
-    g!(F::V, x::V) where V <: AbstractVector{Real}
+    g!(F::V, x::V) where V <: AbstractVector{<:Real}
 ```
 
 Both `F` (output) and `x` (input) are length-19 vectors containing
@@ -175,7 +175,7 @@ function create_nonlinear_system_of_equations(material::Chaboche)
 
     # Compute the residual. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.
-    function g!(F::V, x::V) where V <: AbstractVector{Real}
+    function g!(F::V, x::V) where V <: AbstractVector{<:Real}
         stress_, R_, X1_, X2_ = state_from_vector(x)  # tentative new values from nlsolve
 
         seff_dev = dev(stress_ - X1_ - X2_)
