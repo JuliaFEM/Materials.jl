@@ -2,7 +2,7 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 using Test, Tensors
 dtime = 0.25
-# mat = Material(IdealPlastic, tuple())
+# mat = Material(IdealPlastic, ())
 # mat.properties.youngs_modulus = 200.0e3
 # mat.properties.poissons_ratio = 0.3
 # mat.properties.yield_stress = 100.0

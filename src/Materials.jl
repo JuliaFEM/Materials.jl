@@ -9,7 +9,7 @@ abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
 
 """
-    :+(state::T, dstate::T) where {T <: AbstractMaterialState}
+    :+(state::T, dstate::T) where T <: AbstractMaterialState
 
 Addition for material states.
 
@@ -17,7 +17,7 @@ Given two material states `state` and `dstate` of type `T`, add each field of
 `dstate` into the corresponding field of `state`. Return the resulting material
 state.
 """
-@generated function Base.:+(state::T, dstate::T) where {T <: AbstractMaterialState}
+@generated function Base.:+(state::T, dstate::T) where T <: AbstractMaterialState
    expr = [:(state.$p + dstate.$p) for p in fieldnames(T)]
    return :(T($(expr...)))
 end
@@ -25,7 +25,7 @@ end
 export AbstractMaterial, AbstractMaterialState
 
 """
-    integrate_material!(material::M) where {M<:AbstractMaterial}
+    integrate_material!(material::M) where M <: AbstractMaterial
 
 Integrate one timestep. The input `material.variables` represents the old
 problem state.
@@ -37,12 +37,12 @@ done, the method **must** write the new state into `material.variables_new`.
 (i.e. accepting that one step of time evolution and applying it permanently)
 is the job of `update_material!`.
 """
-function integrate_material!(material::M) where {M<:AbstractMaterial}
+function integrate_material!(material::M) where M <: AbstractMaterial
     error("One needs to define how to integrate material $M!")
 end
 
 """
-    update_material!(material::M) where {M <: AbstractMaterial}
+    update_material!(material::M) where M <: AbstractMaterial
 
 Commit the result of `integrate_material!`.
 
@@ -50,7 +50,7 @@ In `material`, we add `ddrivers` into `drivers`, `dparameters` into
 `parameters`, and replace `variables` by `variables_new`. Then we
 automatically invoke `reset_material!`.
 """
-function update_material!(material::M) where {M <: AbstractMaterial}
+function update_material!(material::M) where M <: AbstractMaterial
     material.drivers += material.ddrivers
     material.parameters += material.dparameters
     material.variables = material.variables_new
@@ -59,7 +59,7 @@ function update_material!(material::M) where {M <: AbstractMaterial}
 end
 
 """
-    reset_material!(material::M) where {M <: AbstractMaterial}
+    reset_material!(material::M) where M <: AbstractMaterial
 
 In `material`, we zero out `ddrivers`, `dparameters` and `variables_new`. This
 clears out the tentative state produced when a timestep has been computed, but
@@ -67,7 +67,7 @@ has not yet been committed.
 
 Used internally by `update_material!`.
 """
-function reset_material!(material::M) where {M <: AbstractMaterial}
+function reset_material!(material::M) where M <: AbstractMaterial
     material.ddrivers = typeof(material.ddrivers)()
     material.dparameters = typeof(material.dparameters)()
     material.variables_new = typeof(material.variables_new)()

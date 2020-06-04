@@ -13,7 +13,7 @@ using Materials, Test, ForwardDiff
     n = 1.0
     K = 100.0
 
-    mat = Material(ViscoPlastic, (:norton, [K, n]))
+    mat = Material(ViscoPlastic, (potential=:norton, params=[K, n]))
     mat.properties.youngs_modulus = 200.0e3
     mat.properties.poissons_ratio = 0.3
     mat.properties.yield_stress = 100.0
@@ -57,5 +57,5 @@ using Materials, Test, ForwardDiff
 end
 
 @testset "Invalid potential is not defined" begin
-    @test_throws ErrorException Material(ViscoPlastic, (:notNorton, [0.0, 0.0]))
+    @test_throws ErrorException Material(ViscoPlastic, (potential=:notNorton, params=[0.0, 0.0]))
 end

@@ -12,7 +12,7 @@ K = 180.0e3
 
 
 # Simulation 1
-mat = Material(ViscoPlastic, (:norton, [K, n]))
+mat = Material(ViscoPlastic, (potential=:norton, params=[K, n]))
 mat.properties.youngs_modulus = E
 mat.properties.poissons_ratio = poissons_ratio
 mat.properties.yield_stress = stress_y
@@ -47,7 +47,7 @@ s11s = [s[1] for s in sim.stresses]
 e11s = [e[1] for e in strains]
 
 # Simulation 2
-mat = Material(ViscoPlastic, (:norton, [K, n]))
+mat = Material(ViscoPlastic, (potential=:norton, params=[K, n]))
 mat.properties.youngs_modulus = E
 mat.properties.poissons_ratio = poissons_ratio
 mat.properties.yield_stress = stress_y
@@ -74,7 +74,7 @@ s11s2 = [s[1] for s in sim.stresses]
 e11s2 = [e[1] for e in strains]
 
 # Simulation 3
-mat = Material(ViscoPlastic, (:norton, [K, n]))
+mat = Material(ViscoPlastic, (potential=:norton, params=[K, n]))
 mat.properties.youngs_modulus = E
 mat.properties.poissons_ratio = poissons_ratio
 mat.properties.yield_stress = stress_y
