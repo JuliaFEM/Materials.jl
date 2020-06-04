@@ -1,15 +1,13 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
+
+# Viscoplastic material. See:
+#   http://www.solid.iei.liu.se/Education/TMHL55/TMHL55_lp1_2010/lecture_notes/plasticity_flow_rule_isotropic_hardening.pdf
+#   http://mms.ensmp.fr/msi_paris/transparents/Georges_Cailletaud/2013-GC-plas3D.pdf
+
 using LinearAlgebra
-# using ForwardDiff
 using NLsolve
 
-# http://www.solid.iei.liu.se/Education/TMHL55/TMHL55_lp1_2010/lecture_notes/plasticity_flow_rule_isotropic_hardening.pdf
-# http://mms.ensmp.fr/msi_paris/transparents/Georges_Cailletaud/2013-GC-plas3D.pdf
-
-#####################################
-# Viscoplastic material definitions #
-#####################################
 mutable struct ViscoPlastic <: AbstractMaterial
     # Material parameters
     youngs_modulus :: Float64
