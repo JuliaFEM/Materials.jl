@@ -2,30 +2,30 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
-    time :: Float64 = zero(Float64)
-    strain :: Symm2 = zero(Symm2{Float64})
+    time::Float64 = zero(Float64)
+    strain::Symm2 = zero(Symm2{Float64})
 end
 
 @with_kw struct IdealPlasticParameterState <: AbstractMaterialState
-    youngs_modulus :: Float64 = zero(Float64)
-    poissons_ratio :: Float64 = zero(Float64)
-    yield_stress :: Float64 = zero(Float64)
+    youngs_modulus::Float64 = zero(Float64)
+    poissons_ratio::Float64 = zero(Float64)
+    yield_stress::Float64 = zero(Float64)
 end
 
 @with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress :: Symm2 = zero(Symm2{Float64})
-    plastic_strain :: Symm2 = zero(Symm2{Float64})
-    cumeq :: Float64 = zero(Float64)
-    jacobian :: Symm4 = zero(Symm4{Float64})
+    stress::Symm2 = zero(Symm2{Float64})
+    plastic_strain::Symm2 = zero(Symm2{Float64})
+    cumeq::Float64 = zero(Float64)
+    jacobian::Symm4 = zero(Symm4{Float64})
 end
 
 @with_kw mutable struct IdealPlastic <: AbstractMaterial
-    drivers :: IdealPlasticDriverState = IdealPlasticDriverState()
-    ddrivers :: IdealPlasticDriverState = IdealPlasticDriverState()
-    variables :: IdealPlasticVariableState = IdealPlasticVariableState()
-    variables_new :: IdealPlasticVariableState = IdealPlasticVariableState()
-    parameters :: IdealPlasticParameterState = IdealPlasticParameterState()
-    dparameters :: IdealPlasticParameterState = IdealPlasticParameterState()
+    drivers::IdealPlasticDriverState = IdealPlasticDriverState()
+    ddrivers::IdealPlasticDriverState = IdealPlasticDriverState()
+    variables::IdealPlasticVariableState = IdealPlasticVariableState()
+    variables_new::IdealPlasticVariableState = IdealPlasticVariableState()
+    parameters::IdealPlasticParameterState = IdealPlasticParameterState()
+    dparameters::IdealPlasticParameterState = IdealPlasticParameterState()
 end
 
 """

@@ -2,41 +2,41 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
-    time :: Float64 = zero(Float64)
-    strain :: Symm2 = zero(Symm2{Float64})
+    time::Float64 = zero(Float64)
+    strain::Symm2 = zero(Symm2{Float64})
 end
 
 @with_kw struct ChabocheParameterState <: AbstractMaterialState
-    E :: Float64 = 0.0
-    nu :: Float64 = 0.0
-    R0 :: Float64 = 0.0
-    Kn :: Float64 = 0.0
-    nn :: Float64 = 0.0
-    C1 :: Float64 = 0.0
-    D1 :: Float64 = 0.0
-    C2 :: Float64 = 0.0
-    D2 :: Float64 = 0.0
-    Q :: Float64 = 0.0
-    b :: Float64 = 0.0
+    E::Float64 = 0.0
+    nu::Float64 = 0.0
+    R0::Float64 = 0.0
+    Kn::Float64 = 0.0
+    nn::Float64 = 0.0
+    C1::Float64 = 0.0
+    D1::Float64 = 0.0
+    C2::Float64 = 0.0
+    D2::Float64 = 0.0
+    Q::Float64 = 0.0
+    b::Float64 = 0.0
 end
 
 @with_kw struct ChabocheVariableState <: AbstractMaterialState
-    stress :: Symm2 = zero(Symm2{Float64})
-    X1 :: Symm2 = zero(Symm2{Float64})
-    X2 :: Symm2 = zero(Symm2{Float64})
-    plastic_strain :: Symm2 = zero(Symm2{Float64})
-    cumeq :: Float64 = zero(Float64)
-    R :: Float64 = zero(Float64)
-    jacobian :: Symm4 = zero(Symm4{Float64})
+    stress::Symm2 = zero(Symm2{Float64})
+    X1::Symm2 = zero(Symm2{Float64})
+    X2::Symm2 = zero(Symm2{Float64})
+    plastic_strain::Symm2 = zero(Symm2{Float64})
+    cumeq::Float64 = zero(Float64)
+    R::Float64 = zero(Float64)
+    jacobian::Symm4 = zero(Symm4{Float64})
 end
 
 @with_kw mutable struct Chaboche <: AbstractMaterial
-    drivers :: ChabocheDriverState = ChabocheDriverState()
-    ddrivers :: ChabocheDriverState = ChabocheDriverState()
-    variables :: ChabocheVariableState = ChabocheVariableState()
-    variables_new :: ChabocheVariableState = ChabocheVariableState()
-    parameters :: ChabocheParameterState = ChabocheParameterState()
-    dparameters :: ChabocheParameterState = ChabocheParameterState()
+    drivers::ChabocheDriverState = ChabocheDriverState()
+    ddrivers::ChabocheDriverState = ChabocheDriverState()
+    variables::ChabocheVariableState = ChabocheVariableState()
+    variables_new::ChabocheVariableState = ChabocheVariableState()
+    parameters::ChabocheParameterState = ChabocheParameterState()
+    dparameters::ChabocheParameterState = ChabocheParameterState()
 end
 
 """
@@ -127,6 +127,7 @@ function integrate_material!(material::Chaboche)
                                           cumeq = cumeq,
                                           jacobian = jacobian)
     material.variables_new = variables_new
+    return nothing
 end
 
 """
