@@ -116,7 +116,7 @@ function integrate_material!(material::Chaboche)
         # the other factor we will have to supply manually.
         drdx = ForwardDiff.jacobian(debang(g!), x)  # Array{19, 19}
         drde = zeros((length(x),6))                 # Array{19, 6}
-        drde[1:6, 1:6] = -tovoigt(jacobian)  # (negative of the) elastic Jacobian. Follows from the defn. of g!.
+        drde[1:6, 1:6] = tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
     variables_new = ChabocheVariableState(stress = stress,
