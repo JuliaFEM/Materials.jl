@@ -1,6 +1,16 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+module ChabocheModule
+
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
+
+import ..AbstractMaterial, ..AbstractMaterialState
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, lame, debang
+import ..integrate_material!  # for method extension
+
+export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
+
 @with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
     time::Float64 = zero(Float64)
     strain::Symm2 = zero(Symm2{Float64})
@@ -44,7 +54,7 @@ end
 
 Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
 """
-@inline function state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+function state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
     return [tovoigt(sigma), R, tovoigt(X1), tovoigt(X2)]
 end
 
@@ -53,7 +63,7 @@ end
 
 Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
 """
-@inline function state_from_vector(x::AbstractVector{S}) where S <: Real
+function state_from_vector(x::AbstractVector{S}) where S <: Real
     sigma = fromvoigt(Symm2{S}, @view x[1:6])
     R = x[7]
     X1 = fromvoigt(Symm2{S}, @view x[8:13])
@@ -208,4 +218,6 @@ function create_nonlinear_system_of_equations(material::Chaboche)
         tovoigt!(view(F, 14:19), X2 + (-1.0 + dp*(2.0/3.0*C2*n - D2*X2_)))
     end
     return g!
+end
+
 end

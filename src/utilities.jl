@@ -1,42 +1,81 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-"""Alias for symmetric tensor type of rank 2, dimension 3."""
+module Utilities
+
+using Tensors, ForwardDiff
+
+export Symm2, Symm4
+export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor
+export lame, delame, debang, find_root
+
+"""Symm2{T} is an alias for SymmetricTensor{2,3,T}."""
 const Symm2{T} = SymmetricTensor{2,3,T}
 
-"""Alias for symmetric tensor type of rank 4, dimension 3."""
+"""Symm4{T} is an alias for SymmetricTensor{4,3,T}."""
 const Symm4{T} = SymmetricTensor{4,3,T}
 
-"""Kronecker delta. delta(i, j) = (i == j) ? 1 : 0."""
+"""
+    delta(i::Integer, j::Integer)
+
+Kronecker delta, defined by delta(i, j) = (i == j) ? 1 : 0.
+"""
 delta(i::Integer, j::Integer) = (i == j) ? 1 : 0
 
-"""Rank-4 unit tensor, defined by II : A = A for any rank-2 tensor A."""
+"""
+    II(T::Type=Float64)
+
+Rank-4 unit tensor, defined by II : A = A for any rank-2 tensor A.
+"""
 II(T::Type=Float64) = Symm4{T}((i,j,k,l) -> delta(i,k)*delta(j,l))
-"""Rank-4 unit tensor, defined by IT : A = transpose(A) for any rank-2 tensor A."""
+
+"""
+    IT(T::Type=Float64)
+
+Rank-4 unit tensor, defined by IT : A = transpose(A) for any rank-2 tensor A.
+"""
 IT(T::Type=Float64) = Symm4{T}((i,j,k,l) -> delta(i,l)*delta(j,k))
 
-"""Rank-4 unit tensor, symmetric. IS ≡ (1/2) (II + IT)."""
-IS(T::Type=Float64) = Symm4{T}((i,j,k,l) -> 1//2 * (II(T) + IT(T)))
-"""Rank-4 unit tensor, screw-symmetric. IA ≡ (1/2) (II - IT)."""
-IA(T::Type=Float64) = Symm4{T}((i,j,k,l) -> 1//2 * (II(T) - IT(T)))
+"""
+    IS(T::Type=Float64)
 
-"""Rank-4 unit tensor, volumetric. IS ≡ (1/3) I ⊗ I, where I is the rank-2 unit tensor."""
+Rank-4 unit tensor, symmetric. IS ≡ (1/2) (II + IT).
+"""
+IS(T::Type=Float64) = 1//2 * (II(T) + IT(T))
+
+"""
+    IA(T::Type=Float64)
+
+Rank-4 unit tensor, screw-symmetric. IA ≡ (1/2) (II - IT).
+"""
+IA(T::Type=Float64) = 1//2 * (II(T) - IT(T))
+
+"""
+    IV(T::Type=Float64)
+
+Rank-4 unit tensor, volumetric. IS ≡ (1/3) I ⊗ I, where I is the rank-2 unit tensor.
+"""
 IV(T::Type=Float64) = Symm4{T}((i,j,k,l) -> 1//3 * delta(i,j)*delta(k,l))
-"""Rank-4 unit tensor, deviatoric. ID ≡ IS - IV."""
+
+"""
+    ID(T::Type=Float64)
+
+Rank-4 unit tensor, deviatoric. ID ≡ IS - IV.
+"""
 ID(T::Type=Float64) = IS(T) - IV(T)
 
 """
-    isotropic_elasticity_tensor(lambda, mu)
+    isotropic_elasticity_tensor(lambda::T, mu::T) where T <: Real
 
 Compute the elasticity tensor C(i,j,k,l) (rank 4, symmetric) for an isotropic
 material having the Lamé parameters `lambda` and `mu`.
 
 If you have (E, nu) instead, use `lame` to get (lambda, mu).
 """
-isotropic_elasticity_tensor(lambda::T, mu::T) where T <: Real = Symm4{T}((i,j,k,l) -> 3 * lambda * IV(T) + 2 * mu * IS(T))
+isotropic_elasticity_tensor(lambda::T, mu::T) where T <: Real = 3 * lambda * IV(T) + 2 * mu * IS(T)
 
 """
-    lame(E, nu)
+    lame(E::Real, nu::Real)
 
 Convert elastic parameters (E, nu) of an isotropic material to Lamé parameters (lambda, mu).
 """
@@ -47,7 +86,7 @@ function lame(E::Real, nu::Real)
 end
 
 """
-    delame(lambda, mu)
+    delame(lambda::Real, mu::Real)
 
 Convert Lamé parameters (lambda, mu) of an isotropic material to elastic parameters (E, nu).
 """
@@ -58,7 +97,7 @@ function delame(lambda::Real, mu::Real)
 end
 
 """
-    debang(f!, ex=nothing)
+    debang(f!::Function, ex=nothing)
 
 Convert a mutating function into non-mutating form.
 
@@ -96,19 +135,21 @@ function debang(f!::Function, ex=nothing)
             f!(out, x)
             return out
         end
+        return f
     else
-        function f(x)
+        # We use a different name to make incremental compilation happy.
+        function f_with_ex(x)
             out = similar(ex)
             f!(out, x)
             return out
         end
+        return f_with_ex
     end
-    return f
 end
 
 # This comes from the old viscoplastic.jl, and is currently unused.
 # The original wording of the error message suggested this was planned to be used for "radial return".
-"""A simple Newton solver for x* such that f(x*) = 0.
+"""A simple Newton solver for the vector x* such that f(x*) = 0.
 
 The input `x` is the initial guess.
 
@@ -132,4 +173,6 @@ function find_root(f::Function, x::AbstractVector{<:Real},
         end
     end
     error("No convergence!")
+end
+
 end

@@ -1,6 +1,16 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+module IdealPlasticModule
+
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
+
+import ..AbstractMaterial, ..AbstractMaterialState
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, IS, ID, lame
+import ..integrate_material!  # for method extension
+
+export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlaticVariableState
+
 @with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
     time::Float64 = zero(Float64)
     strain::Symm2 = zero(Symm2{Float64})
@@ -67,11 +77,7 @@ function integrate_material!(material::IdealPlastic)
         stress -= dcontract(jacobian, dp*n)
 
         # Compute ∂σij/∂εkl, accounting for the plastic contribution.
-        delta(i,j) = i==j ? 1.0 : 0.0
-        II = Symm4{Float64}((i,j,k,l) -> 0.5*(delta(i,k)*delta(j,l) + delta(i,l)*delta(j,k)))  # symmetric
-        V = 1.0/3.0 * Symm4{Float64}((i,j,k,l) -> delta(i,j)*delta(k,l))  # volumetric
-        P = II - V  # deviatoric
-        EE = II + dp/R0 * dcontract(jacobian, 1.5*P - otimes(n,n))  # using the elastic jacobian
+        EE = IS(Float64) + dp/R0 * dcontract(jacobian, 1.5*ID(Float64) - otimes(n,n))  # using the elastic jacobian
         ED = dcontract(inv(EE), jacobian)
         # J = ED - (ED : n) ⊗ (n : ED) / (n : ED : n)
         jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED)) / dcontract(dcontract(n, ED), n)
@@ -81,4 +87,6 @@ function integrate_material!(material::IdealPlastic)
                                               cumeq=cumeq,
                                               jacobian=jacobian)
     material.variables_new = variables_new
+end
+
 end

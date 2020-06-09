@@ -3,10 +3,11 @@
 
 module Materials
 
-using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
-
 abstract type AbstractMaterial end
 abstract type AbstractMaterialState end
+
+export AbstractMaterial, AbstractMaterialState
+export integrate_material!, update_material!, reset_material!
 
 """
     :+(state::T, dstate::T) where T <: AbstractMaterialState
@@ -21,8 +22,6 @@ state.
    expr = [:(state.$p + dstate.$p) for p in fieldnames(T)]
    return :(T($(expr...)))
 end
-
-export AbstractMaterial, AbstractMaterialState
 
 """
     integrate_material!(material::M) where M <: AbstractMaterial
@@ -74,21 +73,22 @@ function reset_material!(material::M) where M <: AbstractMaterial
     return nothing
 end
 
-export integrate_material!, update_material!, reset_material!
-
 include("utilities.jl")
-export Symm2, Symm4, lame, delame, isotropic_elasticity_tensor, debang
+using .Utilities
+export Symm2, Symm4
+export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor
+export lame, delame, debang, find_root
 
 include("idealplastic.jl")
+using .IdealPlasticModule
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
 
 include("chaboche.jl")
+using .ChabocheModule
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-# include("viscoplastic.jl")
-# export ViscoPlastic
-
 include("increments.jl")
+using .Increments
 export uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
 
 end

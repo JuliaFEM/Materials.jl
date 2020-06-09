@@ -1,6 +1,15 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+module Increments
+
+import Tensors: tovoigt, fromvoigt
+
+import ..AbstractMaterial
+import ..Utilities: Symm2
+
+export optimize_dstrain!, uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
+
 # The skeleton of the optimizer is always the same, so we provide it as a
 # higher-order function. The individual specific optimizer functions
 # (`update_dstrain!)` only need to define the "meat" of how to update `dstrain`.
@@ -141,4 +150,6 @@ function stress_driven_uniaxial_increment!(material::AbstractMaterial, dstress11
     end
     optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
+end
+
 end
