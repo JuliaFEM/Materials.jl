@@ -53,13 +53,13 @@ function test_debang()  # just to introduce a local scope so the names `f!`, `f`
     end
     out = [0.0]
     @test all([f!(out, [pi/4]) == nothing,
-             isapprox(out[1], 1/sqrt(2))])
+             isapprox(out, [1/sqrt(2)])])
 
     f = debang(f!)
     @test f isa Function
     out = [0.0]
-    @test all([isapprox(f([pi/4])[1], 1/sqrt(2)),
-             out[1] == 0.0])
+    @test all([isapprox(f([pi/4]), [1/sqrt(2)]),
+             out == [0.0]])
 end
 test_debang()
 
