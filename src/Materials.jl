@@ -24,7 +24,7 @@ state.
 end
 
 """
-    integrate_material!(material::M) where M <: AbstractMaterial
+    integrate_material!(material::AbstractMaterial)
 
 Integrate one timestep. The input `material.variables` represents the old
 problem state.
@@ -41,7 +41,7 @@ function integrate_material!(material::M) where M <: AbstractMaterial
 end
 
 """
-    update_material!(material::M) where M <: AbstractMaterial
+    update_material!(material::AbstractMaterial)
 
 Commit the result of `integrate_material!`.
 
@@ -49,7 +49,7 @@ In `material`, we add `ddrivers` into `drivers`, `dparameters` into
 `parameters`, and replace `variables` by `variables_new`. Then we
 automatically invoke `reset_material!`.
 """
-function update_material!(material::M) where M <: AbstractMaterial
+function update_material!(material::AbstractMaterial)
     material.drivers += material.ddrivers
     material.parameters += material.dparameters
     material.variables = material.variables_new
@@ -58,7 +58,7 @@ function update_material!(material::M) where M <: AbstractMaterial
 end
 
 """
-    reset_material!(material::M) where M <: AbstractMaterial
+    reset_material!(material::AbstractMaterial)
 
 In `material`, we zero out `ddrivers`, `dparameters` and `variables_new`. This
 clears out the tentative state produced when a timestep has been computed, but
@@ -66,7 +66,7 @@ has not yet been committed.
 
 Used internally by `update_material!`.
 """
-function reset_material!(material::M) where M <: AbstractMaterial
+function reset_material!(material::AbstractMaterial)
     material.ddrivers = typeof(material.ddrivers)()
     material.dparameters = typeof(material.dparameters)()
     material.variables_new = typeof(material.variables_new)()
