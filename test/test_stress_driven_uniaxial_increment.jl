@@ -2,18 +2,18 @@
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
 using Test, Tensors, Materials
-parameters = ChabocheParameterState(E = 200.0e3,
-                                    nu = 0.3,
-                                    R0 = 100.0,
-                                    Kn = 100.0,
-                                    nn = 10.0,
-                                    C1 = 10000.0,
-                                    D1 = 100.0,
-                                    C2 = 50000.0,
-                                    D2 = 1000.0,
-                                    Q = 0.0,
-                                    b = 0.1)
-material = Chaboche(parameters = parameters)
+parameters = ChabocheParameterState(E=200.0e3,
+                                    nu=0.3,
+                                    R0=100.0,
+                                    Kn=100.0,
+                                    nn=10.0,
+                                    C1=10000.0,
+                                    D1=100.0,
+                                    C2=50000.0,
+                                    D2=1000.0,
+                                    Q=0.0,
+                                    b=0.1)
+material = Chaboche(parameters=parameters)
 
 dtime = 0.25
 times = [material.drivers.time]
@@ -27,10 +27,10 @@ stresses_expected = [[       50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                      [      150.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                      [      100.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                      [     -100.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
-dstress = 50.0 
+dstress = 50.0
 
-dtimes      = [dtime, dtime, dtime, 1e3, dtime, 1e3]
-dstresses11  = [dstress, dstress, dstress, 0.0, -dstress, -4*dstress]
+dtimes = [dtime, dtime, dtime, 1e3, dtime, 1e3]
+dstresses11 = [dstress, dstress, dstress, 0.0, -dstress, -4*dstress]
 
 for i in 1:length(dtimes)
     dstress11 = dstresses11[i]
