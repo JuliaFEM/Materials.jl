@@ -4,6 +4,9 @@
 using Materials, Test
 
 @testset "Test Materials.jl" begin
+    @testset "test utilities" begin
+        include("test_utilities.jl")
+    end
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
