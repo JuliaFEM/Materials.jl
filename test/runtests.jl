@@ -4,9 +4,6 @@
 using Materials, Test
 
 @testset "Test Materials.jl" begin
-    # @testset "test abstract material" begin
-    #     include("test_abstract_material.jl")
-    # end
     @testset "test ideal plastic material model" begin
         include("test_idealplastic.jl")
     end
@@ -25,7 +22,4 @@ using Materials, Test
     @testset "test biaxial increment" begin
         include("test_biaxial_increment.jl")
     end
-    # @testset "test viscoplastic material model" begin
-    #     include("test_viscoplastic.jl")
-    # end
 end
