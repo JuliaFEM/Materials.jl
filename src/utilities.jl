@@ -20,8 +20,13 @@ const Symm4{T} = SymmetricTensor{4,3,T}
 
 Kronecker delta, defined by delta(i, j) = (i == j) ? 1 : 0.
 """
-delta(i::Integer, j::Integer) = (i == j) ? 1 : 0
+delta(i::T, j::T) where T <: Integer = (i == j) ? one(T) : zero(T)
 
+# TODO: We could probably remove the type argument, and just let the results be
+# inferred as Symm4{Int64}, Symm4{Rational{Int64}} and similar. Simpler to use,
+# and those behave correctly in calculations with types involving other reals
+# such as Float64.
+# Performance implications? Is the Julia compiler smart enough to optimize?
 """
     II(T::Type=Float64)
 

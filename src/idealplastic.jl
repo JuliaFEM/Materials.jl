@@ -11,31 +11,31 @@ import ..integrate_material!  # for method extension
 
 export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlaticVariableState
 
-@with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
-    time::Float64 = zero(Float64)
-    strain::Symm2 = zero(Symm2{Float64})
+@with_kw mutable struct IdealPlasticDriverState{T <: Real} <: AbstractMaterialState
+    time::T = zero(T)
+    strain::Symm2{T} = zero(Symm2{T})
 end
 
-@with_kw struct IdealPlasticParameterState <: AbstractMaterialState
-    youngs_modulus::Float64 = zero(Float64)
-    poissons_ratio::Float64 = zero(Float64)
-    yield_stress::Float64 = zero(Float64)
+@with_kw struct IdealPlasticParameterState{T <: Real} <: AbstractMaterialState
+    youngs_modulus::T = zero(T)
+    poissons_ratio::T = zero(T)
+    yield_stress::T = zero(T)
 end
 
-@with_kw struct IdealPlasticVariableState <: AbstractMaterialState
-    stress::Symm2 = zero(Symm2{Float64})
-    plastic_strain::Symm2 = zero(Symm2{Float64})
-    cumeq::Float64 = zero(Float64)
-    jacobian::Symm4 = zero(Symm4{Float64})
+@with_kw struct IdealPlasticVariableState{T <: Real} <: AbstractMaterialState
+    stress::Symm2{T} = zero(Symm2{T})
+    plastic_strain::Symm2{T} = zero(Symm2{T})
+    cumeq::T = zero(T)
+    jacobian::Symm4{T} = zero(Symm4{T})
 end
 
-@with_kw mutable struct IdealPlastic <: AbstractMaterial
-    drivers::IdealPlasticDriverState = IdealPlasticDriverState()
-    ddrivers::IdealPlasticDriverState = IdealPlasticDriverState()
-    variables::IdealPlasticVariableState = IdealPlasticVariableState()
-    variables_new::IdealPlasticVariableState = IdealPlasticVariableState()
-    parameters::IdealPlasticParameterState = IdealPlasticParameterState()
-    dparameters::IdealPlasticParameterState = IdealPlasticParameterState()
+@with_kw mutable struct IdealPlastic{T <: Real} <: AbstractMaterial
+    drivers::IdealPlasticDriverState{T} = IdealPlasticDriverState{T}()
+    ddrivers::IdealPlasticDriverState{T} = IdealPlasticDriverState{T}()
+    variables::IdealPlasticVariableState{T} = IdealPlasticVariableState{T}()
+    variables_new::IdealPlasticVariableState{T} = IdealPlasticVariableState{T}()
+    parameters::IdealPlasticParameterState{T} = IdealPlasticParameterState{T}()
+    dparameters::IdealPlasticParameterState{T} = IdealPlasticParameterState{T}()
 end
 
 """
@@ -44,7 +44,7 @@ end
 Ideal plastic material: no hardening. The elastic region remains centered on the
 origin, and retains its original size.
 """
-function integrate_material!(material::IdealPlastic)
+function integrate_material!(material::IdealPlastic{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
@@ -77,7 +77,8 @@ function integrate_material!(material::IdealPlastic)
         stress -= dcontract(jacobian, dp*n)
 
         # Compute ∂σij/∂εkl, accounting for the plastic contribution.
-        EE = IS(Float64) + dp/R0 * dcontract(jacobian, 1.5*ID(Float64) - otimes(n,n))  # using the elastic jacobian
+        # EE = IS + dp/R0 * (∂σ/∂ε)_e : ((3/2) ID - n ⊗ n)
+        EE = IS(T) + dp/R0 * dcontract(jacobian, 1.5*ID(T) - otimes(n,n))  # using the elastic jacobian
         ED = dcontract(inv(EE), jacobian)
         # J = ED - (ED : n) ⊗ (n : ED) / (n : ED : n)
         jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED)) / dcontract(dcontract(n, ED), n)
@@ -87,6 +88,7 @@ function integrate_material!(material::IdealPlastic)
                                               cumeq=cumeq,
                                               jacobian=jacobian)
     material.variables_new = variables_new
+    return nothing
 end
 
 end

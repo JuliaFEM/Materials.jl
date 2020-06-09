@@ -11,50 +11,73 @@ import ..integrate_material!  # for method extension
 
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-@with_kw mutable struct ChabocheDriverState <: AbstractMaterialState
-    time::Float64 = zero(Float64)
-    strain::Symm2 = zero(Symm2{Float64})
+@with_kw mutable struct ChabocheDriverState{T <: Real} <: AbstractMaterialState
+    time::T = zero(T)
+    strain::Symm2{T} = zero(Symm2{T})
 end
 
-@with_kw struct ChabocheParameterState <: AbstractMaterialState
-    E::Float64 = 0.0
-    nu::Float64 = 0.0
-    R0::Float64 = 0.0
-    Kn::Float64 = 0.0
-    nn::Float64 = 0.0
-    C1::Float64 = 0.0
-    D1::Float64 = 0.0
-    C2::Float64 = 0.0
-    D2::Float64 = 0.0
-    Q::Float64 = 0.0
-    b::Float64 = 0.0
+# TODO: complete this docstring
+"""Parameter state for Chaboche material.
+
+`E`: Young's modulus
+`nu`: Poisson's ratio
+`R0`: initial yield strength
+`Kn`: plasticity multiplier divisor
+`nn`: plasticity multiplier exponent
+`C1`, `D1`: parameters governing behavior of backstress X1
+`C2`, `D2`: parameters governing behavior of backstress X2
+`Q`: shift parameter for yield strength evolution
+`b`: multiplier for yield strength evolution
+"""
+@with_kw struct ChabocheParameterState{T <: Real} <: AbstractMaterialState
+    E::T = 0
+    nu::T = 0
+    R0::T = 0
+    Kn::T = 0
+    nn::T = 0
+    C1::T = 0
+    D1::T = 0
+    C2::T = 0
+    D2::T = 0
+    Q::T = 0
+    b::T = 0
 end
 
-@with_kw struct ChabocheVariableState <: AbstractMaterialState
-    stress::Symm2 = zero(Symm2{Float64})
-    X1::Symm2 = zero(Symm2{Float64})
-    X2::Symm2 = zero(Symm2{Float64})
-    plastic_strain::Symm2 = zero(Symm2{Float64})
-    cumeq::Float64 = zero(Float64)
-    R::Float64 = zero(Float64)
-    jacobian::Symm4 = zero(Symm4{Float64})
+"""Problem state for Chaboche material.
+
+`stress`: stress tensor
+`X1`: backstress 1
+`X2`: backstress 2
+`plastic_strain`: plastic part of strain tensor
+`cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+`R`: yield strength
+`jacobian`: ∂σij/∂εkl
+"""
+@with_kw struct ChabocheVariableState{T <: Real} <: AbstractMaterialState
+    stress::Symm2{T} = zero(Symm2{T})
+    X1::Symm2{T} = zero(Symm2{T})
+    X2::Symm2{T} = zero(Symm2{T})
+    plastic_strain::Symm2{T} = zero(Symm2{T})
+    cumeq::T = zero(T)
+    R::T = zero(T)
+    jacobian::Symm4{T} = zero(Symm4{T})
 end
 
-@with_kw mutable struct Chaboche <: AbstractMaterial
-    drivers::ChabocheDriverState = ChabocheDriverState()
-    ddrivers::ChabocheDriverState = ChabocheDriverState()
-    variables::ChabocheVariableState = ChabocheVariableState()
-    variables_new::ChabocheVariableState = ChabocheVariableState()
-    parameters::ChabocheParameterState = ChabocheParameterState()
-    dparameters::ChabocheParameterState = ChabocheParameterState()
+@with_kw mutable struct Chaboche{T <: Real} <: AbstractMaterial
+    drivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
+    ddrivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
+    variables::ChabocheVariableState{T} = ChabocheVariableState{T}()
+    variables_new::ChabocheVariableState{T} = ChabocheVariableState{T}()
+    parameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
+    dparameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
 end
 
 """
-    state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+    state_to_vector(sigma::U, R::T, X1::U, X2::U) where U <: Symm2{T} where T <: Real
 
 Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
 """
-function state_to_vector(sigma::T, R::S, X1::T, X2::T) where T <: Symm2{S} where S <: Real
+function state_to_vector(sigma::U, R::T, X1::U, X2::U) where U <: Symm2{T} where T <: Real
     return [tovoigt(sigma), R, tovoigt(X1), tovoigt(X2)]
 end
 
@@ -63,20 +86,20 @@ end
 
 Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
 """
-function state_from_vector(x::AbstractVector{S}) where S <: Real
-    sigma = fromvoigt(Symm2{S}, @view x[1:6])
+function state_from_vector(x::AbstractVector{T}) where T <: Real
+    sigma = fromvoigt(Symm2{T}, @view x[1:6])
     R = x[7]
-    X1 = fromvoigt(Symm2{S}, @view x[8:13])
-    X2 = fromvoigt(Symm2{S}, @view x[14:19])
+    X1 = fromvoigt(Symm2{T}, @view x[8:13])
+    X2 = fromvoigt(Symm2{T}, @view x[14:19])
     return sigma, R, X1, X2
 end
 
 """
-    integrate_material!(material::Chaboche)
+    integrate_material!(material::Chaboche{T}) where T <: Real
 
 Chaboche material with two backstresses. Both kinematic and isotropic hardening.
 """
-function integrate_material!(material::Chaboche)
+function integrate_material!(material::Chaboche{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
@@ -164,7 +187,7 @@ X2 are encoded in Voigt format.
 
 The function `g!` is intended to be handed over to `nlsolve`.
 """
-function create_nonlinear_system_of_equations(material::Chaboche)
+function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
