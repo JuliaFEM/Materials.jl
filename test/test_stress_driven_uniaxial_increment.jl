@@ -36,6 +36,7 @@ let dtime = 0.25,
     for i in 1:length(dtimes)
         dstress11 = dstresses11[i]
         dtime = dtimes[i]
+        # TODO: Does not converge at i = 4. Figure out why.
         stress_driven_uniaxial_increment!(material, dstress11, dtime)
         update_material!(material)
         push!(times, material.drivers.time)
