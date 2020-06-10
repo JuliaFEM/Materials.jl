@@ -3,50 +3,47 @@
 
 using Test, Tensors, LinearAlgebra
 
-@test delta(1, 2) isa Int64
+# Kronecker delta
+@test delta(1, 1) == 1
+@test delta(1, 2) == 0
+@test_throws MethodError delta(1.0, 2.0)  # indices must be integers
+@test_throws MethodError delta(1, BigInt(2))  # both must have the same type
+@test delta(1, 2) isa Int  # the output type matches the input
 @test delta(BigInt(1), BigInt(2)) isa BigInt
-@test_throws MethodError delta(1.0, 2.0)
 
-@test isapprox(tovoigt(II()), I(6))
-@test let Z = zeros(3, 3)
-        isapprox(tovoigt(IT()), Array([I(3) Z;
-                                       Z    Z]))
-      end
+# Various tensors
+let Z3 = zeros(3, 3),
+    O3 = ones(3, 3),
+    I3 = I(3)
+    @test isapprox(tovoigt(II()), I(6))
+    @test isapprox(tovoigt(IT()), [I3  Z3;
+                                   Z3  Z3])
 
-@test let Z = zeros(3, 3)
-    isapprox(tovoigt(IS()), Array([I(3) Z;
-                                   Z    1//2*I(3)]))
-end
-@test let Z = zeros(3, 3)
-    isapprox(tovoigt(IA()), Array([Z  Z;
-                                   Z  1//2*I(3)]))
-end
+    @test isapprox(tovoigt(IS()), [I3  Z3;
+                                   Z3  1//2*I3])
+    @test isapprox(tovoigt(IA()), [Z3  Z3;
+                                   Z3  1//2*I3])
 
-@test let Z = zeros(3, 3),
-          O = ones(3, 3)
-    isapprox(tovoigt(IV()), Array([1//3*O Z;
-                                   Z      Z]))
-end
-@test let Z = zeros(3, 3)
-    isapprox(tovoigt(ID()), Array([  2//3  -1//3  -1//3  0     0     0;
-                                    -1//3   2//3  -1//3  0     0     0;
-                                    -1//3  -1//3   2//3  0     0     0;
-                                     0      0      0     1//2  0     0;
-                                     0      0      0     0     1//2  0;
-                                     0      0      0     0     0     1//2]))
+    @test isapprox(tovoigt(IV()), [1//3*O3  Z3;
+                                   Z3       Z3])
+    @test isapprox(tovoigt(ID()), [(I3 - 1//3*O3)  Z3;
+                                   Z3              1//2*I3])
+
+    @test let lambda = 10.0,
+              mu = 1.0
+        isapprox(tovoigt(isotropic_elasticity_tensor(lambda, mu)), [(lambda*O3 + 2*mu*I3)  Z3;
+                                                              Z3               mu*I3])
+    end
 end
 
-@test isapprox(tovoigt(isotropic_elasticity_tensor(10.0, 0.3)), [10.6  10.0  10.0  0.0  0.0  0.0;
-                                                                 10.0  10.6  10.0  0.0  0.0  0.0;
-                                                                 10.0  10.0  10.6  0.0  0.0  0.0;
-                                                                  0.0   0.0   0.0  0.3  0.0  0.0;
-                                                                  0.0   0.0   0.0  0.0  0.3  0.0;
-                                                                  0.0   0.0   0.0  0.0  0.0  0.3])
+# Lamé parameters for isotropic solids
+@test all(isapprox(result, expected)
+        for (result, expected) in zip(lame(1e11, 0.3), (5.769230769230769e10, 3.846153846153846e10)))
+@test all(isapprox(result, expected)
+        for (result, expected) in zip(delame(lame(1e11, 0.3)...), (1e11, 0.3)))
 
-@test all(isapprox(a, b) for (a, b) in zip(lame(1e11, 0.3), (5.769230769230769e10, 3.846153846153846e10)))
-@test all(isapprox(a, b) for (a, b) in zip(delame(lame(1e11, 0.3)...), (1e11, 0.3)))
-
-function test_debang()  # just to introduce a local scope so the names `f!`, `f` and `out` are local to this test
+# Mutating function to non-mutating function conversion
+function test_debang()  # introduce a local scope so the names `f!`, `f` and `out` are local to this test.
     function f!(out, x)
         out[:] = [sin(elt) for elt in x]
         return nothing
@@ -63,6 +60,7 @@ function test_debang()  # just to introduce a local scope so the names `f!`, `f`
 end
 test_debang()
 
+# Newton root finder
 # The output of g must be an AbstractArray to use ForwardDiff.jacobian (the default `dfdx`) in find_root.
 let g(x) = [(1 - x[1]^2) + x[2]],
     x0 = [0.8, 0.2]
