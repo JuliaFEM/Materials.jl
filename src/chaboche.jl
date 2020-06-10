@@ -19,6 +19,8 @@ end
 # TODO: complete this docstring
 """Parameter state for Chaboche material.
 
+The classical viscoplastic material is a special case of this model with `C1 = C2 = 0`.
+
 `E`: Young's modulus
 `nu`: Poisson's ratio
 `R0`: initial yield strength
