@@ -159,7 +159,7 @@ end
 The input `x` is the initial guess.
 
 The default `dfdx=nothing` uses `ForwardDiff.jacobian` to compute the jacobian
-automatically.
+automatically. In this case the output of `f` must be an `AbstractArray`.
 
 `tol` is measured in the vector norm of the change in `x` between successive
 iterations.

@@ -61,7 +61,6 @@ end
 test_debang()
 
 # Newton root finder
-# The output of g must be an AbstractArray to use ForwardDiff.jacobian (the default `dfdx`) in find_root.
 let g(x) = [(1 - x[1]^2) + x[2]],
     x0 = [0.8, 0.2]
     @test !isapprox(g(x0), [0.0], atol=1e-15)  # find_root should have to actually do something
