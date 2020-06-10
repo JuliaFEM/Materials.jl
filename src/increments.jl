@@ -51,11 +51,12 @@ If `max_iter` is reached and the error measure is still `tol` or greater,
 Note the timestep is **not** committed; we call `integrate_material!`, but not
 `update_material!`. Only `material.variables_new` is updated.
 """
-function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{T} where T <: Real,
+function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
                     dt::Real, update_dstrain!::Function;
                     max_iter::Integer=50, tol::Real=1e-9)
     converged = false
     stress0 = tovoigt(material.variables.stress)  # observed
+    T = typeof(dstrain[1])
     for i=1:max_iter
         material.ddrivers.time = dt
         material.ddrivers.strain = fromvoigt(Symm2{T}, dstrain; offdiagscale=2.0)
