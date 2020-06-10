@@ -3,9 +3,10 @@
 
 module Increments
 
+import LinearAlgebra: norm
 import Tensors: tovoigt, fromvoigt
 
-import ..AbstractMaterial
+import ..AbstractMaterial, ..integrate_material!
 import ..Utilities: Symm2
 
 export optimize_dstrain!, uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
