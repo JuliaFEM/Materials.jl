@@ -80,7 +80,7 @@ end
 Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
 """
 function state_to_vector(sigma::U, R::T, X1::U, X2::U) where U <: Symm2{T} where T <: Real
-    return [tovoigt(sigma), R, tovoigt(X1), tovoigt(X2)]
+    return [tovoigt(sigma); R; tovoigt(X1); tovoigt(X2)]::Vector{T}
 end
 
 """
@@ -89,10 +89,10 @@ end
 Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
 """
 function state_from_vector(x::AbstractVector{T}) where T <: Real
-    sigma = fromvoigt(Symm2{T}, @view x[1:6])
-    R = x[7]
-    X1 = fromvoigt(Symm2{T}, @view x[8:13])
-    X2 = fromvoigt(Symm2{T}, @view x[14:19])
+    sigma::Symm2{T} = fromvoigt(Symm2{T}, @view x[1:6])
+    R::T = x[7]
+    X1::Symm2{T} = fromvoigt(Symm2{T}, @view x[8:13])
+    X2::Symm2{T} = fromvoigt(Symm2{T}, @view x[14:19])
     return sigma, R, X1, X2
 end
 
@@ -233,14 +233,15 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
         # Δ(...) = (...)_new - (...)_old
         #
         # Then move the delta terms to the RHS to get the standard form, (stuff) = 0.
+        # Also, below we avoid the multiplication and division that cancel each other
+        # in the last terms of the equations for ΔX1 and ΔX2.
         #
         dstrain_plastic = dp*n
         dstrain_elastic = dstrain - dstrain_plastic
         tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain_elastic))
         F[7] = R - R_ + b*(Q - R_)*dp
-        # dp is a scalar, so it commutes in multiplication. This allows us to avoid the division by C1.
-        tovoigt!(view(F,  8:13), X1 + (-1.0 + dp*(2.0/3.0*C1*n - D1*X1_)))
-        tovoigt!(view(F, 14:19), X2 + (-1.0 + dp*(2.0/3.0*C2*n - D2*X2_)))
+        tovoigt!(view(F,  8:13), X1 - X1_ + dp*(2.0/3.0*C1*n - D1*X1_))
+        tovoigt!(view(F, 14:19), X2 - X2_ + dp*(2.0/3.0*C2*n - D2*X2_))
     end
     return g!
 end
