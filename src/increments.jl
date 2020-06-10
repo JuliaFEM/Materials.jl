@@ -54,7 +54,6 @@ Note the timestep is **not** committed; we call `integrate_material!`, but not
 function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
                     dt::Real, update_dstrain!::Function;
                     max_iter::Integer=50, tol::Real=1e-9)
-    converged = false
     stress0 = tovoigt(material.variables.stress)  # observed
     T = typeof(dstrain[1])
     for i=1:max_iter
@@ -66,12 +65,10 @@ function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<
         jacobian = tovoigt(material.variables_new.jacobian)
         e = update_dstrain!(dstrain, dstress, jacobian)
         if e < tol
-            converged = true
-            break
+            return nothing
         end
     end
-    converged || error("No convergence in strain increment")
-    return nothing
+    error("No convergence in strain increment")
 end
 
 """
