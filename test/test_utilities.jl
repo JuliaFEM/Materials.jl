@@ -43,22 +43,26 @@ end
         for (result, expected) in zip(delame(lame(1e11, 0.3)...), (1e11, 0.3)))
 
 # Mutating function to non-mutating function conversion
-function test_debang()  # introduce a local scope so the names `f!`, `f` and `out` are local to this test.
+let  # introduce a local scope so the name `f!` is only defined locally for this test.
     function f!(out, x)
         out[:] = [sin(elt) for elt in x]
         return nothing
     end
-    out = [0.0]
-    @test all([f!(out, [pi/4]) == nothing,
-             isapprox(out, [1/sqrt(2)])])
 
-    f = debang(f!)
-    @test f isa Function
-    out = [0.0]
-    @test all([isapprox(f([pi/4]), [1/sqrt(2)]),
-             out == [0.0]])
+    let
+        out = [0.0]
+        @test all([f!(out, [pi/4]) == nothing,
+                 isapprox(out, [1/sqrt(2)])])
+    end
+
+    let
+        out = [0.0]
+        f = debang(f!)
+        @test f isa Function
+        @test all([isapprox(f([pi/4]), [1/sqrt(2)]),
+                 out == [0.0]])
+    end
 end
-test_debang()
 
 # Newton root finder
 let g(x) = [(1 - x[1]^2) + x[2]],

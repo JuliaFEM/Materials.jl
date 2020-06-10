@@ -13,7 +13,7 @@ parameters = ChabocheParameterState(E=200.0e3,
                                     D2=1000.0,
                                     Q=0.0,
                                     b=0.1)
-material = Chaboche(parameters=parameters)
+material = Chaboche{Float64}(parameters=parameters)
 
 dtime = 0.25
 times = [material.drivers.time]
