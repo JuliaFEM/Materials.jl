@@ -25,8 +25,8 @@ The `dstrain` supplied to this routine is the initial guess for the
 optimization. At each iteration, it must be updated by the user-defined
 corrector `update_dstrain!`, whose call signature is expected to be:
 
-    update_dstrain!(dstrain::V, dstress::V, jacobian::V)
-        where V <: AbstractVector{<:Real}
+    update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T})
+        where V <: AbstractVector{T} where T <: Real
       -> err::Real
 
 `dstrain` is the current value of the strain increment, in Voigt format.
@@ -88,7 +88,7 @@ See `optimize_dstrain!`.
 function uniaxial_increment!(material::AbstractMaterial, dstrain11::Real, dt::Real;
                              dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0.0, 0.0, 0.0],
                              max_iter::Integer=50, norm_acc::Real=1e-9)
-    function update_dstrain!(dstrain::V, dstress::V, jacobian::V) where V <: AbstractVector{<:Real}
+    function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
         dstr = -jacobian[2:end,2:end] \ dstress[2:end]
         dstrain[2:end] .+= dstr
         return norm(dstr)
@@ -114,7 +114,7 @@ See `optimize_dstrain!`.
 function biaxial_increment!(material::AbstractMaterial, dstrain11::Real, dstrain12::Real, dt::Real;
                             dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0, 0, dstrain12],
                             max_iter::Integer=50, norm_acc::Real=1e-9)
-    function update_dstrain!(dstrain::V, dstress::V, jacobian::V) where V <: AbstractVector{<:Real}
+    function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
         dstr = -jacobian[2:end-1,2:end-1] \ dstress[2:end-1]
         dstrain[2:end-1] .+= dstr
         return norm(dstr)
@@ -139,7 +139,7 @@ See `optimize_dstrain!`.
 function stress_driven_uniaxial_increment!(material::AbstractMaterial, dstress11::Real, dt::Real;
                                            dstrain::AbstractVector{<:Real}=[dstress11/200e3, -0.3*dstress11/200e3, -0.3*dstress11/200e3, 0.0, 0.0, 0.0],
                                            max_iter::Integer=50, norm_acc::Real=1e-9)
-    function update_dstrain!(dstrain::V, dstress::V, jacobian::V) where V <: AbstractVector{<:Real}
+    function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
         # Mutation of `dstress` doesn't matter, since `dstress` is freshly generated at each iteration.
         # The lexical closure property gives us access to `dstress11` in this scope.
         dstress[1] -= dstress11
