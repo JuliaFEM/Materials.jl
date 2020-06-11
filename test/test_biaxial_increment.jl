@@ -27,8 +27,7 @@ let dtime = 0.25,
         dstrain11 = dstrains11[i]
         dstrain12 = dstrains12[i]
         dtime = dtimes[i]
-        # TODO: After i > 1, never converges to within 1e-9. Figure out why.
-        biaxial_increment!(mat, dstrain11, dstrain12, dtime; norm_acc=1e-8)
+        biaxial_increment!(mat, dstrain11, dstrain12, dtime)
         update_material!(mat)
         if i > 1
             plastic_flow_occurred[i-1] = (mat.variables.cumeq > 0.0)
