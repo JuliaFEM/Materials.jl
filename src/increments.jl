@@ -89,9 +89,9 @@ function uniaxial_increment!(material::AbstractMaterial, dstrain11::Real, dt::Re
                              dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0.0, 0.0, 0.0],
                              max_iter::Integer=50, norm_acc::Real=1e-9)
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
-        dstr = -jacobian[2:end,2:end] \ dstress[2:end]
-        dstrain[2:end] .+= dstr
-        return norm(dstr)
+        dstrain_correction = -jacobian[2:end,2:end] \ dstress[2:end]
+        dstrain[2:end] .+= dstrain_correction
+        return norm(dstrain_correction)
     end
     optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
@@ -115,9 +115,9 @@ function biaxial_increment!(material::AbstractMaterial, dstrain11::Real, dstrain
                             dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0, 0, dstrain12],
                             max_iter::Integer=50, norm_acc::Real=1e-9)
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
-        dstr = -jacobian[2:end-1,2:end-1] \ dstress[2:end-1]
-        dstrain[2:end-1] .+= dstr
-        return norm(dstr)
+        dstrain_correction = -jacobian[2:end-1,2:end-1] \ dstress[2:end-1]
+        dstrain[2:end-1] .+= dstrain_correction
+        return norm(dstrain_correction)
     end
     optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
@@ -143,9 +143,9 @@ function stress_driven_uniaxial_increment!(material::AbstractMaterial, dstress11
         # Mutation of `dstress` doesn't matter, since `dstress` is freshly generated at each iteration.
         # The lexical closure property gives us access to `dstress11` in this scope.
         dstress[1] -= dstress11
-        dstr = -jacobian \ dstress
-        dstrain .+= dstr
-        return norm(dstr)
+        dstrain_correction = -jacobian \ dstress
+        dstrain .+= dstrain_correction
+        return norm(dstrain_correction)
     end
     optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
