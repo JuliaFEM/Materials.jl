@@ -24,7 +24,7 @@ The classical viscoplastic material is a special case of this model with `C1 = C
 `E`: Young's modulus
 `nu`: Poisson's ratio
 `R0`: initial yield strength
-`Kn`: plasticity multiplier divisor
+`Kn`: plasticity multiplier divisor (drag stress)
 `nn`: plasticity multiplier exponent
 `C1`, `D1`: parameters governing behavior of backstress X1
 `C2`, `D2`: parameters governing behavior of backstress X2
@@ -120,8 +120,9 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
 
     # resulting deviatoric plastic stress (accounting for backstresses Xm)
     seff_dev = dev(stress - X1 - X2)
-    # von Mises yield function; f := J(seff_dev) - Y
+    # von Mises yield function
     f = sqrt(1.5)*norm(seff_dev) - (R0 + R)  # using elastic trial problem state
+    isplastic = (f > 0.0)
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2)
@@ -144,16 +145,18 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
         # Compute the new Jacobian, accounting for the plastic contribution. Because
         #   x ≡ [σ R X1 X2]   (vector of length 19, with tensors encoded in Voigt format)
         # we have
-        #   (dx/dε)[1:6,1:6] = dσ/dε
+        #   dσ/dε = (dx/dε)[1:6,1:6]
         # for which we can compute the LHS as follows:
         #   dx/dε = dx/dr dr/dε = inv(dr/dx) dr/dε ≡ (dr/dx) \ (dr/dε)
         # where r = r(x) is the residual, given by the function g!. AD can get us dr/dx automatically,
         # the other factor we will have to supply manually.
         drdx = ForwardDiff.jacobian(debang(g!), x)  # Array{19, 19}
         drde = zeros((length(x),6))                 # Array{19, 6}
-        drde[1:6, 1:6] = -tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
+        drde[1:6, 1:6] = tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
+    # @info """$(f > 0.0 ? "plastic" : "elastic")\n$(tovoigt(jacobian))\n\n"""
+    @info """$(isplastic ? "plastic" : "elastic")\n"""
     variables_new = ChabocheVariableState(stress = stress,
                                           X1 = X1,
                                           X2 = X2,
@@ -212,10 +215,10 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
     # Compute the residual. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.
     function g!(F::V, x::V) where V <: AbstractVector{<:Real}
-        stress_, R_, X1_, X2_ = state_from_vector(x)  # tentative new values from nlsolve
+        stress_new, R_new, X1_new, X2_new = state_from_vector(x)  # tentative new values from nlsolve
 
-        seff_dev = dev(stress_ - X1_ - X2_)
-        f = sqrt(1.5)*norm(seff_dev) - (R0 + R_)
+        seff_dev = dev(stress_new - X1_new - X2_new)
+        f = sqrt(1.5)*norm(seff_dev) - (R0 + R_new)
 
         dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
@@ -223,7 +226,7 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
 
         # The equations are written in a delta form:
         #
-        # Δσ = (∂σ/∂ε)_e : dε_e = (∂σ/∂ε)_e : (dε - dε_p)   (components 1:6)
+        # Δσ = stress_new - stress = (∂σ/∂ε)_e : dε_e = (∂σ/∂ε)_e : (dε - dε_p)   (components 1:6)
         # ΔR = b (Q - R_new) |dε_p|                         (component 7)
         # ΔX1 = (2/3) C1 |dε_p| (n - (3/2) (D1/C1) X1_new)  (components 8:13)
         # ΔX2 = (2/3) C2 |dε_p| (n - (3/2) (D2/C2) X2_new)  (components 14:19)
@@ -238,10 +241,10 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
         #
         dstrain_plastic = dp*n
         dstrain_elastic = dstrain - dstrain_plastic
-        tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain_elastic))
-        F[7] = R - R_ + b*(Q - R_)*dp
-        tovoigt!(view(F,  8:13), X1 - X1_ + dp*(2.0/3.0*C1*n - D1*X1_))
-        tovoigt!(view(F, 14:19), X2 - X2_ + dp*(2.0/3.0*C2*n - D2*X2_))
+        tovoigt!(view(F, 1:6), stress_new - stress - dcontract(jacobian, dstrain_elastic))
+        F[7] = R_new - R - b*(Q - R_new)*dp
+        tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
+        tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
         return nothing
     end
     return g!
