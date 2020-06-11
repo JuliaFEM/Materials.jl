@@ -242,6 +242,7 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
         F[7] = R - R_ + b*(Q - R_)*dp
         tovoigt!(view(F,  8:13), X1 - X1_ + dp*(2.0/3.0*C1*n - D1*X1_))
         tovoigt!(view(F, 14:19), X2 - X2_ + dp*(2.0/3.0*C2*n - D2*X2_))
+        return nothing
     end
     return g!
 end
