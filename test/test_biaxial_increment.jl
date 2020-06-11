@@ -33,7 +33,7 @@ let dtime = 0.25,
             plastic_flow_occurred[i-1] = (mat.variables.cumeq > 0.0)
         end
         @test !iszero(mat.variables.stress[1,1]) && !iszero(mat.variables.stress[1,2])
-        @test isapprox(tovoigt(mat.variables.stress; offdiagscale=2.0)[2:5], zeros(4); atol=1e-5)
+        @test isapprox(tovoigt(mat.variables.stress)[2:5], zeros(4); atol=1e-8)
     end
     @test any(plastic_flow_occurred)
 end
