@@ -56,7 +56,9 @@ function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<
                     max_iter::Integer=50, tol::Real=1e-9)
     stress0 = tovoigt(material.variables.stress)  # observed
     T = typeof(dstrain[1])
+    # @debug "---START---"
     for i=1:max_iter
+        # @debug "$i, $dstrain, $stress0, $(material.variables.stress)"
         material.ddrivers.time = dt
         material.ddrivers.strain = fromvoigt(Symm2{T}, dstrain; offdiagscale=2.0)
         integrate_material!(material)
