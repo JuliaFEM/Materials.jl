@@ -156,7 +156,7 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
     # @info """$(f > 0.0 ? "plastic" : "elastic")\n$(tovoigt(jacobian))\n\n"""
-    @info """$(isplastic ? "plastic" : "elastic")\n"""
+    # @info """$(isplastic ? "plastic" : "elastic")\n"""
     variables_new = ChabocheVariableState(stress = stress,
                                           X1 = X1,
                                           X2 = X2,
