@@ -226,7 +226,7 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
 
         # The equations are written in a delta form:
         #
-        # Δσ = stress_new - stress = (∂σ/∂ε)_e : dε_e = (∂σ/∂ε)_e : (dε - dε_p)   (components 1:6)
+        # Δσ = (∂σ/∂ε)_e : dε_e = (∂σ/∂ε)_e : (dε - dε_p)   (components 1:6)
         # ΔR = b (Q - R_new) |dε_p|                         (component 7)
         # ΔX1 = (2/3) C1 |dε_p| (n - (3/2) (D1/C1) X1_new)  (components 8:13)
         # ΔX2 = (2/3) C2 |dε_p| (n - (3/2) (D2/C2) X2_new)  (components 14:19)
@@ -235,7 +235,7 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
         #
         # Δ(...) = (...)_new - (...)_old
         #
-        # Then move the delta terms to the RHS to get the standard form, (stuff) = 0.
+        # Then move the terms on the RHS to the LHS to get the standard form, (stuff) = 0.
         # Also, below we avoid the multiplication and division that cancel each other
         # in the last terms of the equations for ΔX1 and ΔX2.
         #
