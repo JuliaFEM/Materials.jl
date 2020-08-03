@@ -65,6 +65,10 @@ end
     jacobian::Symm4{T} = zero(Symm4{T})
 end
 
+@with_kw struct ChabocheOptions <: AbstractMaterialState
+    nlsolve_method::Symbol = :trust_region
+end
+
 @with_kw mutable struct Chaboche{T <: Real} <: AbstractMaterial
     drivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
     ddrivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
@@ -72,6 +76,7 @@ end
     variables_new::ChabocheVariableState{T} = ChabocheVariableState{T}()
     parameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
     dparameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
+    options::ChabocheOptions = ChabocheOptions()
 end
 
 """
@@ -126,7 +131,7 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2)
-        res = nlsolve(g!, x0; autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
+        res = nlsolve(g!, x0; method=mat.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
         stress, R, X1, X2 = state_from_vector(x)
