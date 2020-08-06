@@ -14,7 +14,7 @@ let parameters = IdealPlasticParameterState(youngs_modulus=200.0e3,
     let dtime=0.25
         dstrain_dtime = tostrain(epsilon*[1.0, -0.3, -0.3, 0.0, 0.0, 0.0])
         ddrivers = IdealPlasticDriverState(time=dtime, strain=dstrain_dtime*dtime)
-        mat = IdealPlastic{Float64}(parameters=parameters, ddrivers=ddrivers)
+        mat = IdealPlastic(parameters=parameters, ddrivers=ddrivers)
         integrate_material!(mat)
         update_material!(mat)
         @test isapprox(mat.variables.stress, uniaxial_stress(50.0))

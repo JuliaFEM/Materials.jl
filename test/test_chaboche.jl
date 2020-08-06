@@ -31,7 +31,7 @@ let path = joinpath("test_chaboche", "unitelement_results.rpt"),
                                         D2=1000.0,
                                         Q=50.0,
                                         b=0.1),
-    mat = Chaboche{Float64}(parameters=parameters)
+    mat = Chaboche(parameters=parameters)
 
     s33s = [mat.variables.stress[3,3]]
     for i=2:length(ts)

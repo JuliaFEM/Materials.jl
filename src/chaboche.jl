@@ -9,9 +9,13 @@ import ..AbstractMaterial, ..AbstractMaterialState
 import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, lame, debang
 import ..integrate_material!  # for method extension
 
+# parametrically polymorphic for any type representing ℝ
+export GenericChaboche, GenericChabocheDriverState, GenericChabocheParameterState, GenericChabocheVariableState
+
+# specialization for Float64
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
-@with_kw mutable struct ChabocheDriverState{T <: Real} <: AbstractMaterialState
+@with_kw mutable struct GenericChabocheDriverState{T <: Real} <: AbstractMaterialState
     time::T = zero(T)
     strain::Symm2{T} = zero(Symm2{T})
 end
@@ -31,7 +35,7 @@ The classical viscoplastic material is a special case of this model with `C1 = C
 `Q`: shift parameter for yield strength evolution
 `b`: multiplier for yield strength evolution
 """
-@with_kw struct ChabocheParameterState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericChabocheParameterState{T <: Real} <: AbstractMaterialState
     E::T = 0
     nu::T = 0
     R0::T = 0
@@ -55,7 +59,7 @@ end
 `R`: yield strength
 `jacobian`: ∂σij/∂εkl
 """
-@with_kw struct ChabocheVariableState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericChabocheVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
     X1::Symm2{T} = zero(Symm2{T})
     X2::Symm2{T} = zero(Symm2{T})
@@ -65,19 +69,25 @@ end
     jacobian::Symm4{T} = zero(Symm4{T})
 end
 
+# TODO: Does this eventually need a {T}?
 @with_kw struct ChabocheOptions <: AbstractMaterialState
     nlsolve_method::Symbol = :trust_region
 end
 
-@with_kw mutable struct Chaboche{T <: Real} <: AbstractMaterial
-    drivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
-    ddrivers::ChabocheDriverState{T} = ChabocheDriverState{T}()
-    variables::ChabocheVariableState{T} = ChabocheVariableState{T}()
-    variables_new::ChabocheVariableState{T} = ChabocheVariableState{T}()
-    parameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
-    dparameters::ChabocheParameterState{T} = ChabocheParameterState{T}()
+@with_kw mutable struct GenericChaboche{T <: Real} <: AbstractMaterial
+    drivers::GenericChabocheDriverState{T} = GenericChabocheDriverState{T}()
+    ddrivers::GenericChabocheDriverState{T} = GenericChabocheDriverState{T}()
+    variables::GenericChabocheVariableState{T} = GenericChabocheVariableState{T}()
+    variables_new::GenericChabocheVariableState{T} = GenericChabocheVariableState{T}()
+    parameters::GenericChabocheParameterState{T} = GenericChabocheParameterState{T}()
+    dparameters::GenericChabocheParameterState{T} = GenericChabocheParameterState{T}()
     options::ChabocheOptions = ChabocheOptions()
 end
+
+ChabocheDriverState = GenericChabocheDriverState{Float64}
+ChabocheParameterState = GenericChabocheParameterState{Float64}
+ChabocheVariableState = GenericChabocheVariableState{Float64}
+Chaboche = GenericChaboche{Float64}
 
 """
     state_to_vector(sigma::U, R::T, X1::U, X2::U) where U <: Symm2{T} where T <: Real
@@ -102,11 +112,11 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
 end
 
 """
-    integrate_material!(material::Chaboche{T}) where T <: Real
+    integrate_material!(material::GenericChaboche{T}) where T <: Real
 
 Chaboche material with two backstresses. Both kinematic and isotropic hardening.
 """
-function integrate_material!(material::Chaboche{T}) where T <: Real
+function integrate_material!(material::GenericChaboche{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
@@ -171,7 +181,7 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
 end
 
 """
-    create_nonlinear_system_of_equations(material::Chaboche)
+    create_nonlinear_system_of_equations(material::GenericChaboche{T}) where T <: Real
 
 Create and return an instance of the equation system for the incremental form of
 the evolution equations of the Chaboche material.
@@ -194,7 +204,7 @@ X2 are encoded in Voigt format.
 
 The function `g!` is intended to be handed over to `nlsolve`.
 """
-function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: Real
+function create_nonlinear_system_of_equations(material::GenericChaboche{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
