@@ -127,7 +127,6 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
     seff_dev = dev(stress - X1 - X2)
     # von Mises yield function
     f = sqrt(1.5)*norm(seff_dev) - (R0 + R)  # using elastic trial problem state
-    isplastic = (f > 0.0)
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2)
@@ -160,8 +159,6 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
         drde[1:6, 1:6] = tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
-    # @info """$(f > 0.0 ? "plastic" : "elastic")\n$(tovoigt(jacobian))\n\n"""
-    # @info """$(isplastic ? "plastic" : "elastic")\n"""
     variables_new = ChabocheVariableState(stress = stress,
                                           X1 = X1,
                                           X2 = X2,
