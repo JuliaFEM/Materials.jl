@@ -173,8 +173,8 @@ end
 """
     create_nonlinear_system_of_equations(material::Chaboche)
 
-Create and return an instance of the equation system for the delta form of the
-evolution equations of the Chaboche material.
+Create and return an instance of the equation system for the incremental form of
+the evolution equations of the Chaboche material.
 
 Used internally for computing the plastic contribution in `integrate_material!`.
 
@@ -226,7 +226,7 @@ function create_nonlinear_system_of_equations(material::Chaboche{T}) where T <: 
         dp = dotp*dtime
         n = sqrt(1.5)*seff_dev/norm(seff_dev)
 
-        # The equations are written in a delta form:
+        # The equations are written in an incremental form:
         #
         # Δσ = (∂σ/∂ε)_e : dε_e = (∂σ/∂ε)_e : (dε - dε_p)   (components 1:6)
         # ΔR = b (Q - R_new) |dε_p|                         (component 7)
