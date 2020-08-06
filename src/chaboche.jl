@@ -130,7 +130,7 @@ function integrate_material!(material::Chaboche{T}) where T <: Real
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2)
-        res = nlsolve(g!, x0; method=mat.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
+        res = nlsolve(g!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
         stress, R, X1, X2 = state_from_vector(x)
