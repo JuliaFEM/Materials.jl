@@ -9,17 +9,24 @@ import Tensors: tovoigt, fromvoigt
 import ..AbstractMaterial, ..integrate_material!
 import ..Utilities: Symm2
 
-export optimize_dstrain!, uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
+export find_dstrain!, uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
 
 # The skeleton of the optimizer is always the same, so we provide it as a
 # higher-order function. The individual specific optimizer functions
 # (`update_dstrain!)` only need to define the "meat" of how to update `dstrain`.
 """
-    optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
-                      dt::Real, update_dstrain!::Function;
-                      max_iter::Integer=50, tol::Real=1e-9)
+    find_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
+                  dt::Real, update_dstrain!::Function;
+                  max_iter::Integer=50, tol::Real=1e-9)
 
 Find a compatible strain increment for `material`.
+
+The functions in this module are made to be able to easily simulate stress
+states produced by some of the most common test machines. Take for example the
+function `uniaxial_increment!`. In a push-pull machine (with a smooth specimen),
+we know that the stress state is uniaxial (in the measuring volume), so given
+the strain increment in the direction where the stress is nonzero, we find
+a strain increment that produces zero stress in the other directions.
 
 The `dstrain` supplied to this routine is the initial guess for the
 optimization. At each iteration, it must be updated by the user-defined
@@ -38,8 +45,10 @@ integrating the material for one timestep of length `dt`, using the current
 value of `dstrain` as a driving strain increment, and `stress0` is the stress
 state stored in `materials.variables.stress`.
 
-`jacobian` is ∂σij/∂εkl (`material.variables_new.jacobian`), provided by the
-material implementation.
+`jacobian` is ∂σij/∂εkl (`material.variables_new.jacobian`), as computed by the
+material implementation. In many cases, the dstrain optimization can actually be
+performed by a Newton-Raphson root finder, so we pass the jacobian to facilitate
+writing the update formula for such a root finder.
 
 The return value `err` must be an error measure (Real, >= 0).
 
@@ -51,9 +60,9 @@ If `max_iter` is reached and the error measure is still `tol` or greater,
 Note the timestep is **not** committed; we call `integrate_material!`, but not
 `update_material!`. Only `material.variables_new` is updated.
 """
-function optimize_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
-                    dt::Real, update_dstrain!::Function;
-                    max_iter::Integer=50, tol::Real=1e-9)
+function find_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
+                       dt::Real, update_dstrain!::Function;
+                       max_iter::Integer=50, tol::Real=1e-9)
     stress0 = tovoigt(material.variables.stress)  # observed
     T = typeof(dstrain[1])
     # @debug "---START---"
@@ -85,7 +94,7 @@ increment are taken as prescribed. This routine computes the other components of
 the strain increment such that the predicted stress state matches the stored
 one.
 
-See `optimize_dstrain!`.
+See `find_dstrain!`.
 """
 function uniaxial_increment!(material::AbstractMaterial, dstrain11::Real, dt::Real;
                              dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0.0, 0.0, 0.0],
@@ -95,7 +104,7 @@ function uniaxial_increment!(material::AbstractMaterial, dstrain11::Real, dt::Re
         dstrain[2:end] .+= dstrain_correction
         return norm(dstrain_correction)
     end
-    optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
+    find_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
 end
 
@@ -111,7 +120,7 @@ The material state (`material.variables`) and the components 11 and 12 of the
 components of the strain increment such that the predicted stress state matches
 the stored one.
 
-See `optimize_dstrain!`.
+See `find_dstrain!`.
 """
 function biaxial_increment!(material::AbstractMaterial, dstrain11::Real, dstrain12::Real, dt::Real;
                             dstrain::AbstractVector{<:Real}=[dstrain11, -0.3*dstrain11, -0.3*dstrain11, 0, 0, dstrain12],
@@ -121,7 +130,7 @@ function biaxial_increment!(material::AbstractMaterial, dstrain11::Real, dstrain
         dstrain[2:end-1] .+= dstrain_correction
         return norm(dstrain_correction)
     end
-    optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
+    find_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
 end
 
@@ -136,7 +145,7 @@ The material state (`material.variables`) and the component 11 of the *stress*
 increment are taken as prescribed. This routine computes a strain increment such
 that the predicted stress state matches the stored one.
 
-See `optimize_dstrain!`.
+See `find_dstrain!`.
 """
 function stress_driven_uniaxial_increment!(material::AbstractMaterial, dstress11::Real, dt::Real;
                                            dstrain::AbstractVector{<:Real}=[dstress11/200e3, -0.3*dstress11/200e3, -0.3*dstress11/200e3, 0.0, 0.0, 0.0],
@@ -149,7 +158,7 @@ function stress_driven_uniaxial_increment!(material::AbstractMaterial, dstress11
         dstrain .+= dstrain_correction
         return norm(dstrain_correction)
     end
-    optimize_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
+    find_dstrain!(material, dstrain, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
     return nothing
 end
 
