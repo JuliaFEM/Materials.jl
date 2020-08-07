@@ -171,8 +171,8 @@ automatically. In this case the output of `f` must be an `AbstractArray`.
 iterations.
 """
 function find_root(f::Function, x::AbstractVector{<:Real},
-            dfdx::Union{Function, Nothing}=nothing;
-            max_iter::Integer=50, tol::Real=1e-9)
+                   dfdx::Union{Function, Nothing}=nothing;
+                   max_iter::Integer=50, tol::Real=1e-9)
     if dfdx === nothing
         dfdx = (x) -> ForwardDiff.jacobian(f, x)
     end
