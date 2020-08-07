@@ -5,7 +5,7 @@ mutable struct Continuum3D <: FieldProblem
     material_model :: Symbol
 end
 
-Continuum3D() = Continuum3D(:IdealPlastic)
+Continuum3D() = Continuum3D(:PerfectPlastic)
 FEMBase.get_unknown_field_name(::Continuum3D) = "displacement"
 
 function FEMBase.assemble_elements!(problem::Problem{Continuum3D},

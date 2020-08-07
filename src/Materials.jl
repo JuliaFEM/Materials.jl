@@ -80,8 +80,8 @@ export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor
 export lame, delame, debang, find_root
 
 include("idealplastic.jl")
-using .IdealPlasticModule
-export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
+using .PerfectPlasticModule
+export PerfectPlastic, PerfectPlasticDriverState, PerfectPlasticParameterState, PerfectPlasticVariableState
 
 include("chaboche.jl")
 using .ChabocheModule

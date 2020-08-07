@@ -6,10 +6,10 @@ using Test, Tensors
 let E = 200.0e3,
     nu = 0.3,
     yield_stress = 100.0,
-    parameters = IdealPlasticParameterState(youngs_modulus=E,
+    parameters = PerfectPlasticParameterState(youngs_modulus=E,
                                             poissons_ratio=nu,
                                             yield_stress=yield_stress),
-    mat = IdealPlastic(parameters=parameters),
+    mat = PerfectPlastic(parameters=parameters),
     times = [0.0],
     loads = [0.0],
     dt = 0.5,
@@ -36,7 +36,7 @@ let E = 200.0e3,
         dstrain31 = loads[i] - loads[i-1]
         dstrain = [0.0, 0.0, 0.0, 0.0, 0.0, dstrain31]
         dstrain_ = fromvoigt(Symm2{Float64}, dstrain; offdiagscale=2.0)
-        ddrivers = IdealPlasticDriverState(time=dtime, strain=dstrain_)
+        ddrivers = PerfectPlasticDriverState(time=dtime, strain=dstrain_)
         mat.ddrivers = ddrivers
         integrate_material!(mat)
         update_material!(mat)

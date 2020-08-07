@@ -5,7 +5,7 @@ using Materials, FEMBase, LinearAlgebra
 
 # Standard simulation of ideal plastic material model
 
-analysis, problem, element, bc_elements, ip = get_material_analysis(:IdealPlastic)
+analysis, problem, element, bc_elements, ip = get_material_analysis(:PerfectPlastic)
 update!(element, "youngs modulus", 200.0e3)
 update!(element, "poissons ratio", 0.3)
 update!(element, "yield stress", 100.0)

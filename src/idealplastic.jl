@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-module IdealPlasticModule
+module PerfectPlasticModule
 
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 
@@ -10,50 +10,50 @@ import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, IS, ID, lame
 import ..integrate_material!  # for method extension
 
 # parametrically polymorphic for any type representing ℝ
-export GenericIdealPlastic, GenericIdealPlasticDriverState, GenericIdealPlasticParameterState, GenericIdealPlasticVariableState
+export GenericPerfectPlastic, GenericPerfectPlasticDriverState, GenericPerfectPlasticParameterState, GenericPerfectPlasticVariableState
 
 # specialization for Float64
-export IdealPlastic, IdealPlasticDriverState, IdealPlasticParameterState, IdealPlasticVariableState
+export PerfectPlastic, PerfectPlasticDriverState, PerfectPlasticParameterState, PerfectPlasticVariableState
 
-@with_kw mutable struct GenericIdealPlasticDriverState{T <: Real} <: AbstractMaterialState
+@with_kw mutable struct GenericPerfectPlasticDriverState{T <: Real} <: AbstractMaterialState
     time::T = zero(T)
     strain::Symm2{T} = zero(Symm2{T})
 end
 
-@with_kw struct GenericIdealPlasticParameterState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericPerfectPlasticParameterState{T <: Real} <: AbstractMaterialState
     youngs_modulus::T = zero(T)
     poissons_ratio::T = zero(T)
     yield_stress::T = zero(T)
 end
 
-@with_kw struct GenericIdealPlasticVariableState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericPerfectPlasticVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
     plastic_strain::Symm2{T} = zero(Symm2{T})
     cumeq::T = zero(T)
     jacobian::Symm4{T} = zero(Symm4{T})
 end
 
-@with_kw mutable struct GenericIdealPlastic{T <: Real} <: AbstractMaterial
-    drivers::GenericIdealPlasticDriverState{T} = GenericIdealPlasticDriverState{T}()
-    ddrivers::GenericIdealPlasticDriverState{T} = GenericIdealPlasticDriverState{T}()
-    variables::GenericIdealPlasticVariableState{T} = GenericIdealPlasticVariableState{T}()
-    variables_new::GenericIdealPlasticVariableState{T} = GenericIdealPlasticVariableState{T}()
-    parameters::GenericIdealPlasticParameterState{T} = GenericIdealPlasticParameterState{T}()
-    dparameters::GenericIdealPlasticParameterState{T} = GenericIdealPlasticParameterState{T}()
+@with_kw mutable struct GenericPerfectPlastic{T <: Real} <: AbstractMaterial
+    drivers::GenericPerfectPlasticDriverState{T} = GenericPerfectPlasticDriverState{T}()
+    ddrivers::GenericPerfectPlasticDriverState{T} = GenericPerfectPlasticDriverState{T}()
+    variables::GenericPerfectPlasticVariableState{T} = GenericPerfectPlasticVariableState{T}()
+    variables_new::GenericPerfectPlasticVariableState{T} = GenericPerfectPlasticVariableState{T}()
+    parameters::GenericPerfectPlasticParameterState{T} = GenericPerfectPlasticParameterState{T}()
+    dparameters::GenericPerfectPlasticParameterState{T} = GenericPerfectPlasticParameterState{T}()
 end
 
-IdealPlastic = GenericIdealPlastic{Float64}
-IdealPlasticDriverState = GenericIdealPlasticDriverState{Float64}
-IdealPlasticParameterState = GenericIdealPlasticParameterState{Float64}
-IdealPlasticVariableState = GenericIdealPlasticVariableState{Float64}
+PerfectPlastic = GenericPerfectPlastic{Float64}
+PerfectPlasticDriverState = GenericPerfectPlasticDriverState{Float64}
+PerfectPlasticParameterState = GenericPerfectPlasticParameterState{Float64}
+PerfectPlasticVariableState = GenericPerfectPlasticVariableState{Float64}
 
 """
-    integrate_material!(material::GenericIdealPlastic)
+    integrate_material!(material::GenericPerfectPlastic)
 
 Ideal plastic material: no hardening. The elastic region remains centered on the
 origin, and retains its original size.
 """
-function integrate_material!(material::GenericIdealPlastic{T}) where T <: Real
+function integrate_material!(material::GenericPerfectPlastic{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
@@ -92,7 +92,7 @@ function integrate_material!(material::GenericIdealPlastic{T}) where T <: Real
         # J = ED - (ED : n) ⊗ (n : ED) / (n : ED : n)
         jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED)) / dcontract(dcontract(n, ED), n)
     end
-    variables_new = GenericIdealPlasticVariableState(stress=stress,
+    variables_new = GenericPerfectPlasticVariableState(stress=stress,
                                               plastic_strain=plastic_strain,
                                               cumeq=cumeq,
                                               jacobian=jacobian)

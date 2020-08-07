@@ -4,10 +4,10 @@
 using Test, Tensors
 
 let dtime = 0.25,
-    parameters = IdealPlasticParameterState(youngs_modulus=200.0e3,
+    parameters = PerfectPlasticParameterState(youngs_modulus=200.0e3,
                                             poissons_ratio=0.3,
                                             yield_stress=100.0),
-    mat = IdealPlastic(parameters=parameters),
+    mat = PerfectPlastic(parameters=parameters),
     tostrain(vec) = fromvoigt(Symm2, vec; offdiagscale=2.0),
     tostress(vec) = fromvoigt(Symm2, vec),
     uniaxial_stress(sigma) = tostress([sigma, 0, 0, 0, 0, 0]),

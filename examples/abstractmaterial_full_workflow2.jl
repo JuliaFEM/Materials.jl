@@ -53,18 +53,18 @@ end
     dparameters :: ChabocheParameterState = ChabocheParameterState()
 end
 
-@with_kw mutable struct IdealPlasticDriverState <: AbstractMaterialState
+@with_kw mutable struct PerfectPlasticDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
     strain :: Symm2 = zero(Symm2{Float64})
 end
 
-@with_kw struct IdealPlasticParameterState <: AbstractMaterialState
+@with_kw struct PerfectPlasticParameterState <: AbstractMaterialState
     youngs_modulus :: Float64 = zero(Float64)
     poissons_ratio :: Float64 = zero(Float64)
     yield_stress :: Float64 = zero(Float64)
 end
 
-@with_kw struct IdealPlasticVariableState <: AbstractMaterialState
+@with_kw struct PerfectPlasticVariableState <: AbstractMaterialState
     stress :: Symm2 = zero(Symm2{Float64})
     plastic_strain :: Symm2 = zero(Symm2{Float64})
     cumeq :: Float64 = zero(Float64)
@@ -95,18 +95,18 @@ end
 #     dparameters :: ParameterState{M} = ParameterState{M}()
 # end
 
-@with_kw mutable struct IdealPlastic <: AbstractMaterial
-    drivers :: IdealPlasticDriverState = IdealPlasticDriverState()
-    ddrivers :: IdealPlasticDriverState = IdealPlasticDriverState()
-    variables :: IdealPlasticVariableState = IdealPlasticVariableState()
-    variables_new :: IdealPlasticVariableState = IdealPlasticVariableState()
-    parameters :: IdealPlasticParameterState = IdealPlasticParameterState()
-    dparameters :: IdealPlasticParameterState = IdealPlasticParameterState()
+@with_kw mutable struct PerfectPlastic <: AbstractMaterial
+    drivers :: PerfectPlasticDriverState = PerfectPlasticDriverState()
+    ddrivers :: PerfectPlasticDriverState = PerfectPlasticDriverState()
+    variables :: PerfectPlasticVariableState = PerfectPlasticVariableState()
+    variables_new :: PerfectPlasticVariableState = PerfectPlasticVariableState()
+    parameters :: PerfectPlasticParameterState = PerfectPlasticParameterState()
+    dparameters :: PerfectPlasticParameterState = PerfectPlasticParameterState()
 end
 
 
 mat = Chaboche()
-mat2 = IdealPlastic()
+mat2 = PerfectPlastic()
 
 function isotropic_elasticity_tensor(lambda, mu)
     delta(i,j) = i==j ? 1.0 : 0.0
