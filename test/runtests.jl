@@ -7,11 +7,11 @@ using Materials, Test
     @testset "test utilities" begin
         include("test_utilities.jl")
     end
-    @testset "test ideal plastic uniaxial stress" begin
-        include("test_idealplastic.jl")
+    @testset "test perfect plastic uniaxial stress" begin
+        include("test_perfectplastic.jl")
     end
-    @testset "test ideal plastic pure shear" begin
-        include("test_idealplastic_shear.jl")
+    @testset "test perfect plastic pure shear" begin
+        include("test_perfectplastic_shear.jl")
     end
     @testset "test chaboche uniaxial stress" begin
         include("test_chaboche.jl")

@@ -44,7 +44,7 @@ t = 0.0:0.1:3.0
 plot(e11.(t), s11.(t), label="\$\\sigma_{11}\$")
 plot!(e22.(t), s22.(t), label="\$\\sigma_{22}\$")
 plot!(e33.(t), s33.(t), label="\$\\sigma_{33}\$")
-title!("Stress-strain curve of idealplastic material model, uniaxial strain")
+title!("Stress-strain curve of perfect plastic material model, uniaxial strain")
 ylabel!("Stress [MPa]")
 xlabel!("Strain [str]")
 savefig(joinpath("one_element_ideal_plastic/uniaxial_strain.svg"))

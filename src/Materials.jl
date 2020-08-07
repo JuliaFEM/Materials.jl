@@ -79,7 +79,7 @@ export Symm2, Symm4
 export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor
 export lame, delame, debang, find_root
 
-include("idealplastic.jl")
+include("perfectplastic.jl")
 using .PerfectPlasticModule
 export PerfectPlastic, PerfectPlasticDriverState, PerfectPlasticParameterState, PerfectPlasticVariableState
 
