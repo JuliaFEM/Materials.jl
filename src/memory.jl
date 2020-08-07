@@ -1,9 +1,26 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+# TODO: write docstrings for all public functions
+# TODO: add comments where needed
+# TODO: generalize to generic Real {T}
+# TODO: add abstraction for problem state marshaling (see chaboche.jl)
+# TODO: use debang
+# TODO: use clearer names for variables
+
+module MemoryModule
+
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
+
+import ..AbstractMaterial, ..AbstractMaterialState
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, lame, debang
+import ..integrate_material!  # for method extension
+
+export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState
+
 @with_kw mutable struct MemoryDriverState <: AbstractMaterialState
     time :: Float64 = zero(Float64)
-    strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    strain :: Symm2{Float64} = zero(Symm2{Float64})
 end
 
 @with_kw struct MemoryParameterState <: AbstractMaterialState
@@ -27,15 +44,15 @@ end
 end
 
 @with_kw struct MemoryVariableState <: AbstractMaterialState
-    stress :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    X1 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    X2 :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    stress :: Symm2{Float64} = zero(Symm2{Float64})
+    X1 :: Symm2{Float64} = zero(Symm2{Float64})
+    X2 :: Symm2{Float64} = zero(Symm2{Float64})
+    plastic_strain :: Symm2{Float64} = zero(Symm2{Float64})
     cumeq :: Float64 = zero(Float64)
     R :: Float64 = zero(Float64)
     q :: Float64 = zero(Float64)
-    zeta :: SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
-    jacobian :: SymmetricTensor{4,3} = zero(SymmetricTensor{4,3,Float64})
+    zeta :: Symm2{Float64} = zero(Symm2{Float64})
+    jacobian :: Symm4{Float64} = zero(Symm4{Float64})
 end
 
 @with_kw mutable struct Memory <: AbstractMaterial
@@ -53,14 +70,12 @@ function integrate_material!(material::Memory)
     dd = material.ddrivers
     d = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q0, QM, mu, b, eta, m, pt, xi = p
-    mu_ = E/(2.0*(1.0+nu))
-    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    lambda, mu_ = lame(E, nu)
 
     @unpack strain, time = d
     dstrain = dd.strain
     dtime = dd.time
     @unpack stress, X1, X2, plastic_strain, cumeq, R, q, zeta, jacobian = v
-
 
     # Elastic trial
     jacobian = isotropic_elasticity_tensor(lambda, mu_)
@@ -76,10 +91,10 @@ function integrate_material!(material::Memory)
         res = nlsolve(g!, x0; autodiff = :forward) # Explicit update to memory-surface
         res.f_converged || error("Nonlinear system of equations with explicit surface did not converge!")
         x = res.zero
-        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
+        stress = fromvoigt(Symm2{Float64}, @view x[1:6])
         R = x[7]
-        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
-        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
+        X1 = fromvoigt(Symm2{Float64}, @view x[8:13])
+        X2 = fromvoigt(Symm2{Float64}, @view x[14:19])
 
         seff = stress - X1 - X2
         seff_dev = dev(seff)
@@ -118,7 +133,7 @@ function integrate_material!(material::Memory)
         drdx = ForwardDiff.jacobian(residuals, x)
         drde = zeros((length(x),6))
         drde[1:6, 1:6] = -tovoigt(jacobian)
-        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx\drde)[1:6, 1:6])
+        jacobian = fromvoigt(Symm4{Float64}, (drdx\drde)[1:6, 1:6])
     end
     variables_new = MemoryVariableState(stress = stress,
                                           X1 = X1,
@@ -138,8 +153,7 @@ function create_nonlinear_system_of_equations(material::Memory)
     dd = material.ddrivers
     d = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q0, QM, mu, b, eta, m, pt, xi = p
-    mu_ = E/(2.0*(1.0+nu))
-    lambda = E*nu/((1.0+nu)*(1.0-2.0*nu))
+    lambda, mu_ = lame(E, nu)
 
     @unpack strain, time = d
     dstrain = dd.strain
@@ -188,6 +202,7 @@ function create_nonlinear_system_of_equations(material::Memory)
 
         tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain - dstrain_plastic))
         F[7] = R - R_ + b*((QM + (Q0 - QM)*exp(-2.0*mu*q_))-R_)*dp
+        # TODO: fix unnecessary division by C1 (see chaboche.jl)
         if isapprox(C1, 0.0)
             tovoigt!(view(F, 8:13), X1 - X1_)
         else
@@ -200,4 +215,6 @@ function create_nonlinear_system_of_equations(material::Memory)
         end
     end
     return g!
+end
+
 end

@@ -1,9 +1,26 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+# TODO: write docstrings for all public functions
+# TODO: add comments where needed
+# TODO: generalize to generic Real {T}
+# TODO: add abstraction for problem state marshaling (see chaboche.jl)
+# TODO: use debang
+# TODO: use clearer names for variables
+
+module DSAModule
+
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
+
+import ..AbstractMaterial, ..AbstractMaterialState
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, lame, debang
+import ..integrate_material!  # for method extension
+
+export DSA, DSADriverState, DSAParameterState, DSAVariableState
+
 @with_kw mutable struct DSADriverState <: AbstractMaterialState
     time::Float64 = zero(Float64)
-    strain::SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+    strain::Symm2{Float64} = zero(Symm2{Float64})
 end
 
 @with_kw struct DSAParameterState <: AbstractMaterialState
@@ -31,15 +48,15 @@ end
 end
 
 @with_kw struct DSAVariableState <: AbstractMaterialState
-    stress::SymmetricTensor{2,3}          = zero(SymmetricTensor{2,3,Float64})
-    X1::SymmetricTensor{2,3}              = zero(SymmetricTensor{2,3,Float64})
-    X2::SymmetricTensor{2,3}              = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain::SymmetricTensor{2,3}  = zero(SymmetricTensor{2,3,Float64})
-    cumeq::Float64                        = zero(Float64)
-    R::Float64                            = zero(Float64)
-    jacobian::SymmetricTensor{4,3}        = zero(SymmetricTensor{4,3,Float64})
-    ta::Float64                           = zero(Float64)
-    Ra::Float64                           = zero(Float64)
+    stress::Symm2{Float64}          = zero(Symm2{Float64})
+    X1::Symm2{Float64}              = zero(Symm2{Float64})
+    X2::Symm2{Float64}              = zero(Symm2{Float64})
+    plastic_strain::Symm2{Float64}  = zero(Symm2{Float64})
+    cumeq::Float64                  = zero(Float64)
+    R::Float64                      = zero(Float64)
+    jacobian::Symm4{Float64}        = zero(Symm4{Float64})
+    ta::Float64                     = zero(Float64)
+    Ra::Float64                     = zero(Float64)
 end
 
 @with_kw mutable struct DSA <: AbstractMaterial
@@ -57,8 +74,7 @@ function integrate_material!(material::DSA)
     dd = material.ddrivers
     d  = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
-    mu     = E / ( 2.0 * (1.0 + nu) )
-    lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
+    lambda, mu = lame(E, nu)
     @unpack strain, time = d
     dstrain  = dd.strain
     dtime    = dd.time
@@ -78,10 +94,10 @@ function integrate_material!(material::DSA)
         x = res.zero
         res.f_converged || error("Nonlinear system of equations did not converge!")
 
-        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
+        stress = fromvoigt(Symm2{Float64}, @view x[1:6])
         R  = x[7]
-        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
-        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
+        X1 = fromvoigt(Symm2{Float64}, @view x[8:13])
+        X2 = fromvoigt(Symm2{Float64}, @view x[14:19])
         ta = x[20]
         Ra = x[21]
 
@@ -102,7 +118,7 @@ function integrate_material!(material::DSA)
         drdx = ForwardDiff.jacobian(residuals, x)
         drde = zeros((length(x), 6))
         drde[1:6, 1:6] = -tovoigt(jacobian)
-        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx \ drde)[1:6, 1:6])
+        jacobian = fromvoigt(Symm4{Float64}, (drdx \ drde)[1:6, 1:6])
     else
         ta += dtime
     end 
@@ -116,8 +132,7 @@ function create_nonlinear_system_of_equations(material::DSA)
     dd = material.ddrivers
     d  = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
-    mu     = E / ( 2.0 * (1.0 + nu) )
-    lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
+    lambda, mu = lame(E, nu)
     @unpack strain, time = d
     dstrain = dd.strain
     dtime = dd.time
@@ -143,6 +158,7 @@ function create_nonlinear_system_of_equations(material::DSA)
 
         tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain - dstrain_plastic))
         F[7] = R - R_ + b * ( Q - R_ ) * dp
+        # TODO: fix unnecessary division by C1 (see chaboche.jl)
         if isapprox(C1, 0.0)
             tovoigt!(view(F, 8:13), X1 - X1_)
         else
@@ -171,4 +187,6 @@ function create_nonlinear_system_of_equations(material::DSA)
         F[21] = Ra - Ra_ + ba * (Ras - Ra_) * dp
     end
     return g!
+end
+
 end
