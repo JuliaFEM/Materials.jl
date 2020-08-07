@@ -83,6 +83,9 @@ isotropic_elasticity_tensor(lambda::T, mu::T) where T <: Real = 3 * lambda * IV(
     lame(E::Real, nu::Real)
 
 Convert elastic parameters (E, nu) of an isotropic material to Lamé parameters (lambda, mu).
+
+See:
+    https://en.wikipedia.org/wiki/Template:Elastic_moduli
 """
 function lame(E::Real, nu::Real)
     lambda = E * nu / ((1 + nu) * (1 - 2 * nu))
@@ -94,6 +97,9 @@ end
     delame(lambda::Real, mu::Real)
 
 Convert Lamé parameters (lambda, mu) of an isotropic material to elastic parameters (E, nu).
+
+See:
+    https://en.wikipedia.org/wiki/Template:Elastic_moduli
 """
 function delame(lambda::Real, mu::Real)
     E = mu * (3 * lambda + 2 * mu) / (lambda + mu)
