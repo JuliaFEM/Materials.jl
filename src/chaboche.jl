@@ -169,13 +169,13 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
         drde[1:6, 1:6] = tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
         jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
-    variables_new = ChabocheVariableState(stress = stress,
-                                          X1 = X1,
-                                          X2 = X2,
-                                          R = R,
-                                          plastic_strain = plastic_strain,
-                                          cumeq = cumeq,
-                                          jacobian = jacobian)
+    variables_new = GenericChabocheVariableState{T}(stress = stress,
+                                                    X1 = X1,
+                                                    X2 = X2,
+                                                    R = R,
+                                                    plastic_strain = plastic_strain,
+                                                    cumeq = cumeq,
+                                                    jacobian = jacobian)
     material.variables_new = variables_new
     return nothing
 end
