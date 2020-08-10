@@ -254,7 +254,9 @@ function create_nonlinear_system_of_equations(material::GenericChaboche{T}) wher
         dstrain_plastic = dp*n
         dstrain_elastic = dstrain - dstrain_plastic
         tovoigt!(view(F, 1:6), stress_new - stress - dcontract(jacobian, dstrain_elastic))
+
         F[7] = R_new - R - b*(Q - R_new)*dp
+
         tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
         tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
         return nothing
