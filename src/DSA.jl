@@ -292,7 +292,6 @@ function create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <
         else
             JX2_new = sqrt(1.5) * ndX2_new
         end
-        # JX2_new = sqrt(1.5)*norm(dev(X2_new))
         sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery term
         tovoigt!(view(F, 14:19), X2 - X2_new + dp*(2.0/3.0*C2*n - D2*X2_new) - dtime*sr2_new)
 
