@@ -1,9 +1,6 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-# TODO: write docstrings for all public functions
-# TODO: add comments where needed
-
 module DSAModule
 
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
