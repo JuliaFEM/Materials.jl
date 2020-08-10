@@ -75,9 +75,9 @@ end
 `plastic_strain`: plastic part of strain tensor
 `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
 `R`: yield strength
-`jacobian`: ∂σij/∂εkl
 `ta`: ???
 `Ra`: ???
+`jacobian`: ∂σij/∂εkl
 """
 @with_kw struct GenericDSAVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
@@ -86,9 +86,9 @@ end
     plastic_strain::Symm2{T} = zero(Symm2{T})
     cumeq::T = zero(T)
     R::T = zero(T)
-    jacobian::Symm4{T} = zero(Symm4{T})
     ta::T = zero(T)
     Ra::T = zero(T)
+    jacobian::Symm4{T} = zero(Symm4{T})
 end
 
 # TODO: Does this eventually need a {T}?
