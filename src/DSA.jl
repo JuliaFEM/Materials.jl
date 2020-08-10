@@ -67,7 +67,7 @@ This is similar to the Chaboche model, but with additional static recovery terms
 end
 
 # TODO: complete this docstring
-"""Problem state for Chaboche material.
+"""Problem state for DSA material.
 
 `stress`: stress tensor
 `X1`: backstress 1
