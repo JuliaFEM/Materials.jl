@@ -126,12 +126,42 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
 end
 
 """
+    strain_memory_explicit_update(q, zeta, plastic_strain, dp, cumeq, pt, n, eta, xi, m)
+
+Internal helper function for what it says on the tin.
+
+Return `(dq, dzeta)`, the computed increments for `q` and `zeta`
+for the given input.
+"""
+function strain_memory_explicit_update(q, zeta, plastic_strain, dp, cumeq, pt, n, eta, xi, m)
+    dq = zero(q)
+    dzeta = zero(zeta)
+    JF = sqrt(1.5)*norm(dev(plastic_strain - zeta))
+    FF = 2.0/3.0*JF - q
+    if FF > 0.0
+        nF = 1.5*dev(plastic_strain - zeta)/JF
+        nnF = dcontract(n, nF)
+        if nnF > 0
+            dq = 2.0/3.0*eta*nnF*dp
+            dzeta = 2.0/3.0*(1.0 - eta)*nnF*nF*dp
+        end
+    else
+        # Memory evanescence term
+        if cumeq >= pt
+            dq = -xi*q^m*dp
+        end
+    end
+    return dq, dzeta
+end
+
+"""
     integrate_material!(material::GenericMemory{T}) where T <: Real
 
-Material model with memory effect.
+Material model with a strain memory effect.
 
 This is similar to the Chaboche material with two backstresses, with both
-kinematic and isotropic hardening, but this model also features a memory term.
+kinematic and isotropic hardening, but this model also features a strain
+memory term.
 """
 function integrate_material!(material::GenericMemory{T}) where T <: Real
     p = material.parameters
@@ -174,22 +204,9 @@ function integrate_material!(material::GenericMemory{T}) where T <: Real
         plastic_strain += dp*n
         cumeq += dp
 
-        # Strain memory - explicit update
-        JF = sqrt(1.5)*norm(dev(plastic_strain - zeta))
-        FF = 2.0/3.0*JF - q
-        if FF > 0.0
-            nF = 1.5*dev(plastic_strain - zeta)/JF
-            nnF = dcontract(n, nF)
-            if nnF > 0
-                q += 2.0/3.0*eta*nnF*dp
-                zeta += 2.0/3.0*(1.0 - eta)*nnF*nF*dp
-            end
-        else
-            # Memory evanescence term
-            if cumeq >= pt
-                q += -xi*q^m*dp
-            end
-        end
+        dq, dzeta = strain_memory_explicit_update(q, zeta, plastic_strain, dp, cumeq, pt, n, eta, xi, m)
+        q += dq
+        zeta += dzeta
 
         # Compute the new Jacobian, accounting for the plastic contribution.
         drdx = ForwardDiff.jacobian(debang(g!), x)
@@ -272,28 +289,9 @@ function create_nonlinear_system_of_equations(material::GenericMemory{T}) where 
 
         # Strain memory - explicit update
         plastic_strain_new = plastic_strain + dstrain_plastic
-        JF = sqrt(1.5)*norm(dev(plastic_strain_new - zeta))
-        FF = 2.0/3.0*JF - q
-        if FF > 0.0
-            nF = 1.5*dev(plastic_strain_new - zeta)/JF
-            nnF = dcontract(n, nF)
-            if nnF > 0
-                q_new = q + 2.0/3.0*eta*nnF*dp
-                zeta_new = zeta + 2.0/3.0*(1.0 - eta)*nnF*nF*dp
-            else
-                q_new = q
-                zeta_new = zeta
-            end
-        else
-            # Memory evanescence term
-            p_new = cumeq + dp
-            if p_new > pt
-                q_new = q - xi*q^m*dp
-            else
-                q_new = q
-            end
-            zeta_new = zeta
-        end
+        dq, dzeta = strain_memory_explicit_update(q, zeta, plastic_strain_new, dp, cumeq, pt, n, eta, xi, m)
+        q_new = q + dq
+        zeta_new = zeta + dzeta
 
         # The equations are written in an incremental form.
         # TODO: multiply the equations by -1 to make them easier to understand in the context of the rest of the model.
