@@ -273,7 +273,7 @@ function create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <
         # HACK: The zero special case is needed here to make ForwardDiff happy.
         #
         # Otherwise, when ndX1_new = 0, the components 2:end of the automatic
-        # derivative of g! will be NaN, which causes the calculation of the
+        # derivative of JX1_new will be NaN, which causes the calculation of the
         # material jacobian to silently fail. This usually manifests itself as a
         # mysterious convergence failure, when this model is used in the strain
         # optimizer.
