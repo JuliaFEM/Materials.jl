@@ -1,8 +1,6 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-# TODO: write docstrings for all public functions
-
 module MemoryModule
 
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
@@ -22,6 +20,24 @@ export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState
     strain::Symm2{T} = zero(Symm2{T})
 end
 
+# TODO: complete this docstring
+"""Parameter state for Memory material.
+
+`E`: Young's modulus
+`nu`: Poisson's ratio
+`R0`: initial yield strength
+`Kn`: plasticity multiplier divisor (drag stress)
+`nn`: plasticity multiplier exponent
+`C1`, `D1`: parameters governing behavior of backstress X1
+`C2`, `D2`: parameters governing behavior of backstress X2
+`Q0`: ???
+`QM`: ???
+`mu`: ???
+`b`: ???
+`eta`: ???
+`m`: ???
+`pt`: memory evanescence threshold for cumulative equivalent plastic strain
+"""
 @with_kw struct GenericMemoryParameterState{T <: Real} <: AbstractMaterialState
     E::T = 0.0
     nu::T = 0.0
@@ -42,6 +58,19 @@ end
     xi::T = 0.0
 end
 
+# TODO: complete this docstring
+"""Problem state for Memory material.
+
+`stress`: stress tensor
+`X1`: backstress 1
+`X2`: backstress 2
+`plastic_strain`: plastic part of strain tensor
+`cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+`R`: yield strength
+`q`: ???
+`zeta`: ???
+`jacobian`: ∂σij/∂εkl
+"""
 @with_kw struct GenericMemoryVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
     X1::Symm2{T} = zero(Symm2{T})
@@ -96,6 +125,14 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
     return sigma, R, X1, X2
 end
 
+"""
+    integrate_material!(material::GenericMemory{T}) where T <: Real
+
+Material model with memory effect.
+
+This is similar to the Chaboche material with two backstresses, with both
+kinematic and isotropic hardening, but this model also features a memory term.
+"""
 function integrate_material!(material::GenericMemory{T}) where T <: Real
     p = material.parameters
     v = material.variables
@@ -173,6 +210,30 @@ function integrate_material!(material::GenericMemory{T}) where T <: Real
     return nothing
 end
 
+"""
+    create_nonlinear_system_of_equations(material::GenericMemory{T}) where T <: Real
+
+Create and return an instance of the equation system for the incremental form of
+the evolution equations of the Memory material.
+
+Used internally for computing the plastic contribution in `integrate_material!`.
+
+The input `material` represents the problem state at the end of the previous
+timestep. The created equation system will hold its own copy of that state.
+
+The equation system is represented as a mutating function `g!` that computes the
+residual:
+
+```julia
+    g!(F::V, x::V) where V <: AbstractVector{<:Real}
+```
+
+Both `F` (output) and `x` (input) are length-19 vectors containing
+[sigma, R, X1, X2], in that order. The tensor quantities sigma, X1,
+X2 are encoded in Voigt format.
+
+The function `g!` is intended to be handed over to `nlsolve`.
+"""
 function create_nonlinear_system_of_equations(material::GenericMemory{T}) where T <: Real
     p = material.parameters
     v = material.variables
