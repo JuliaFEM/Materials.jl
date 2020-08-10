@@ -40,7 +40,7 @@ let parameters = MemoryParameterState(E = 200.0e3,
     zetas = [tostrain(mat.variables.zeta)]
 
     function snapshot!()
-        push!(times, copy(mat.drivers.time))
+        push!(times, mat.drivers.time)
         push!(stresses, tostress(mat.variables.stress))
         push!(strains, tostrain(mat.drivers.strain))
         push!(plastic_strains, tostrain(mat.variables.plastic_strain))
