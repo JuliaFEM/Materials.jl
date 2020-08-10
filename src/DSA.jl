@@ -270,24 +270,30 @@ function create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <
 
         F[7] = R - R_new + b*(Q - R_new)*dp
 
-        ndX1_new = norm(dev(X1_new)) # Static recovery component
+        # HACK: The zero special case is needed here to make ForwardDiff happy.
+        #
+        # Otherwise, when ndX1_new = 0, the components 2:end of the automatic
+        # derivative of g! will be NaN, which causes the calculation of the
+        # material jacobian to silently fail. This usually manifests itself as a
+        # mysterious convergence failure, when this model is used in the strain
+        # optimizer.
+        ndX1_new = norm(dev(X1_new))
         if iszero(ndX1_new)
             JX1_new = 0.0
         else
             JX1_new = sqrt(1.5) * ndX1_new
         end
-        # JX1_new = sqrt(1.5)*norm(dev(X1_new))  # WTF: This doesn't work though it's equivalent?
-        sr1_new = (JX1_new^(m1 - 1) * X1_new) / (M1^m1)  # static recovery
+        sr1_new = (JX1_new^(m1 - 1) * X1_new) / (M1^m1)  # static recovery term
         tovoigt!(view(F, 8:13), X1 - X1_new + dp*(2.0/3.0*C1*n - D1*X1_new) - dtime*sr1_new)
 
-        ndX2_new = norm(dev(X2_new)) # Static recovery component
+        ndX2_new = norm(dev(X2_new))
         if iszero(ndX2_new)
             JX2_new = 0.0
         else
             JX2_new = sqrt(1.5) * ndX2_new
         end
         # JX2_new = sqrt(1.5)*norm(dev(X2_new))
-        sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery
+        sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery term
         tovoigt!(view(F, 14:19), X2 - X2_new + dp*(2.0/3.0*C2*n - D2*X2_new) - dtime*sr2_new)
 
         Ras = P1 * (1.0 - exp(-P2 * ta_new^m))
