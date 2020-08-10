@@ -270,33 +270,25 @@ function create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <
 
         F[7] = R - R_new + b*(Q - R_new)*dp
 
-        # TODO: figure out what's going on here. This doesn't reduce consistently at the limit C1 -> 0.
-        if isapprox(C1, 0.0)
-            tovoigt!(view(F, 8:13), X1 - X1_new)
+        ndX1_new = norm(dev(X1_new)) # Static recovery component
+        if iszero(ndX1_new)
+            JX1_new = 0.0
         else
-            ndX1_new = norm(dev(X1_new)) # Static recovery component
-            if iszero(ndX1_new)
-                JX1_new = 0.0
-            else
-                JX1_new = sqrt(1.5) * ndX1_new
-            end
-            # JX1_new = sqrt(1.5)*norm(dev(X1_new))
-            sr1_new = (JX1_new^(m1 - 1) * X1_new) / (M1^m1)  # static recovery
-            tovoigt!(view(F, 8:13), X1 - X1_new + dp*(2.0/3.0*C1*n - D1*X1_new) - dtime*sr1_new)
+            JX1_new = sqrt(1.5) * ndX1_new
         end
-        if isapprox(C2, 0.0)
-            tovoigt!(view(F, 14:19), X2 - X2_new)
+        # JX1_new = sqrt(1.5)*norm(dev(X1_new))  # WTF: This doesn't work though it's equivalent?
+        sr1_new = (JX1_new^(m1 - 1) * X1_new) / (M1^m1)  # static recovery
+        tovoigt!(view(F, 8:13), X1 - X1_new + dp*(2.0/3.0*C1*n - D1*X1_new) - dtime*sr1_new)
+
+        ndX2_new = norm(dev(X2_new)) # Static recovery component
+        if iszero(ndX2_new)
+            JX2_new = 0.0
         else
-            ndX2_new = norm(dev(X2_new)) # Static recovery component
-            if iszero(ndX2_new)
-                JX2_new = 0.0
-            else
-                JX2_new = sqrt(1.5) * ndX2_new
-            end
-            # JX2_new = sqrt(1.5)*norm(dev(X2_new))
-            sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery
-            tovoigt!(view(F, 14:19), X2 - X2_new + dp*(2.0/3.0*C2*n - D2*X2_new) - dtime*sr2_new)
+            JX2_new = sqrt(1.5) * ndX2_new
         end
+        # JX2_new = sqrt(1.5)*norm(dev(X2_new))
+        sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery
+        tovoigt!(view(F, 14:19), X2 - X2_new + dp*(2.0/3.0*C2*n - D2*X2_new) - dtime*sr2_new)
 
         Ras = P1 * (1.0 - exp(-P2 * ta_new^m))
         F[20] = ta - ta_new + dtime - (ta_new / w)*dp
