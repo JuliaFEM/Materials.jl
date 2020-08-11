@@ -115,6 +115,19 @@ end
     integrate_material!(material::GenericChaboche{T}) where T <: Real
 
 Chaboche material with two backstresses. Both kinematic and isotropic hardening.
+
+See:
+
+    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    Viscoplastic constitutive equations of combustion chamber materials including
+    cyclic hardening and dynamic strain aging. International Journal of Plasticity
+    46 (2013), 1--22. http://dx.doi.org/10.1016/j.ijplas.2012.09.011
+
+Further reading:
+
+    J.-L. Chaboche. A review of some plasticity and viscoplasticity constitutive
+    theories. International Journal of Plasticity 24 (2008), 1642--1693.
+    http://dx.doi.org/10.1016/j.ijplas.2008.03.009
 """
 function integrate_material!(material::GenericChaboche{T}) where T <: Real
     p = material.parameters
@@ -149,7 +162,7 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
         seff_dev = dev(stress - X1 - X2)
         f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
 
-        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn  # plasticity multiplier, see equations (3) and (4) in Chaboche 2013
+        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn  # plasticity multiplier, see equations (3) and (4) in Chaboche et al. 2013
         dp = dotp*dtime  # |dε_p|, using backward Euler (dotp is ∂ε_p/∂t at the end of the timestep)
         n = sqrt(1.5)*seff_dev/norm(seff_dev)  # Chaboche: a (tensorial) unit direction, s.t. 2/3 * (n : n) = 1; also n = ∂f/∂σ.
 
