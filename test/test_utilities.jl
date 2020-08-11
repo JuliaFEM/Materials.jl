@@ -14,8 +14,9 @@ using Test, Tensors, LinearAlgebra
 # Various tensors
 let Z3 = zeros(3, 3),
     O3 = ones(3, 3),
-    I3 = I(3)
-    @test isapprox(tovoigt(II()), I(6))
+    eye(n) = Diagonal([1 for _ in range(1, length=n)]),  # TODO: in Julia 1.3 and later, we can just say I(n)
+    I3 = eye(3)
+    @test isapprox(tovoigt(II()), eye(6))
     @test isapprox(tovoigt(IT()), [I3  Z3;
                                    Z3  Z3])
 
