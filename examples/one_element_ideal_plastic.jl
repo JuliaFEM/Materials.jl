@@ -3,7 +3,7 @@
 
 using Materials, FEMBase, LinearAlgebra
 
-# Standard simulation of ideal plastic material model
+# Standard simulation of perfect plastic material model
 
 analysis, problem, element, bc_elements, ip = get_material_analysis(:PerfectPlastic)
 update!(element, "youngs modulus", 200.0e3)

@@ -50,7 +50,7 @@ PerfectPlasticVariableState = GenericPerfectPlasticVariableState{Float64}
 """
     integrate_material!(material::GenericPerfectPlastic)
 
-Ideal plastic material: no hardening. The elastic region remains centered on the
+Perfect plastic material: no hardening. The elastic region remains centered on the
 origin, and retains its original size.
 """
 function integrate_material!(material::GenericPerfectPlastic{T}) where T <: Real
@@ -81,7 +81,7 @@ function integrate_material!(material::GenericPerfectPlastic{T}) where T <: Real
         plastic_strain += dp*n
         cumeq += dp  # cumulative equivalent plastic strain (note dp ≥ 0)
 
-        # Ideal plastic material: the stress state cannot be outside the yield surface.
+        # Perfect plastic material: the stress state cannot be outside the yield surface.
         # Project it back to the yield surface.
         stress -= dcontract(jacobian, dp*n)
 
