@@ -13,27 +13,25 @@ using Test, Tensors, LinearAlgebra
 
 # Various tensors
 let Z3 = zeros(3, 3),
-    O3 = ones(3, 3),
-    eye(n) = Diagonal([1 for _ in range(1, length=n)]),  # TODO: in Julia 1.3 and later, we can just say I(n)
-    I3 = eye(3)
-    @test isapprox(tovoigt(II()), eye(6))
-    @test isapprox(tovoigt(IT()), [I3  Z3;
+    O3 = ones(3, 3)
+    @test isapprox(tovoigt(II()), I)
+    @test isapprox(tovoigt(IT()), [I   Z3;
                                    Z3  Z3])
 
-    @test isapprox(tovoigt(IS()), [I3  Z3;
-                                   Z3  1//2*I3])
+    @test isapprox(tovoigt(IS()), [I   Z3;
+                                   Z3  1//2*I])
     @test isapprox(tovoigt(IA()), [Z3  Z3;
-                                   Z3  1//2*I3])
+                                   Z3  1//2*I])
 
     @test isapprox(tovoigt(IV()), [1//3*O3  Z3;
                                    Z3       Z3])
-    @test isapprox(tovoigt(ID()), [(I3 - 1//3*O3)  Z3;
-                                   Z3              1//2*I3])
+    @test isapprox(tovoigt(ID()), [(I - 1//3*O3)  Z3;
+                                   Z3             1//2*I])
 
     @test let lambda = 10.0,
               mu = 1.0
-        isapprox(tovoigt(isotropic_elasticity_tensor(lambda, mu)), [(lambda*O3 + 2*mu*I3)  Z3;
-                                                              Z3               mu*I3])
+        isapprox(tovoigt(isotropic_elasticity_tensor(lambda, mu)), [(lambda*O3 + 2*mu*I)  Z3;
+                                                                    Z3                    mu*I])
     end
 end
 
