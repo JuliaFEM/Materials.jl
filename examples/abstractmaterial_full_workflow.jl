@@ -1,10 +1,13 @@
+# This file is a part of JuliaFEM.
+# License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
+#
+# Some examples of how to use the Chaboche material model.
+
 using Parameters
 using ForwardDiff
+using DelimitedFiles, Test
 
 using Materials
-
-mat = Chaboche()
-mat2 = PerfectPlastic()
 
 function simple_integration_test()
     parameters = ChabocheParameterState(E = 200.0e3,
@@ -38,27 +41,27 @@ function simple_integration_test()
     update_material!(chabmat)
     @info "time = $(chabmat.drivers.time), stress = $(chabmat.variables.stress)"
 end
-
-using DelimitedFiles, Test
-path = joinpath(@__DIR__, "one_elem_disp_chaboche", "unitelement_results.rpt")
-data = readdlm(path, Float64; skipstart=4)
-ts = data[:,1]
-s11_ = data[:,2]
-s12_ = data[:,3]
-s13_ = data[:,4]
-s22_ = data[:,5]
-s23_ = data[:,6]
-s33_ = data[:,7]
-e11_ = data[:,8]
-e12_ = data[:,9]
-e13_ = data[:,10]
-e22_ = data[:,11]
-e23_ = data[:,12]
-e33_ = data[:,13]
-
-strains = [[e11_[i], e22_[i], e33_[i], e23_[i], e13_[i], e12_[i]] for i in 1:length(ts)]
+simple_integration_test()
 
 function test_chaboche()
+    path = joinpath(@__DIR__, "one_elem_disp_chaboche", "unitelement_results.rpt")
+    data = readdlm(path, Float64; skipstart=4)
+    ts = data[:,1]
+    s11_ = data[:,2]
+    s12_ = data[:,3]
+    s13_ = data[:,4]
+    s22_ = data[:,5]
+    s23_ = data[:,6]
+    s33_ = data[:,7]
+    e11_ = data[:,8]
+    e12_ = data[:,9]
+    e13_ = data[:,10]
+    e22_ = data[:,11]
+    e23_ = data[:,12]
+    e33_ = data[:,13]
+
+    strains = [[e11_[i], e22_[i], e33_[i], e23_[i], e13_[i], e12_[i]] for i in 1:length(ts)]
+
     parameters = ChabocheParameterState(E = 200.0e3,
                                         nu = 0.3,
                                         R0 = 100.0,
@@ -82,8 +85,8 @@ function test_chaboche()
     end
     @test isapprox(s33s, s33_; rtol=0.01)
 end
-
 test_chaboche()
+
 # Profile.clear_malloc_data()
 # test_chaboche()
 # using BenchmarkTools
@@ -106,7 +109,7 @@ function simple_integration_test_fd_tangent()
     ddrivers = ChabocheDriverState(time=0.25, strain=0.25*dstrain_dtime)
     chabmat = Chaboche(parameters=parameters, ddrivers=ddrivers)
 
-    function get_stress(dstrain)
+    function get_stress(dstrain::Symm2)
         chabmat.ddrivers.strain = dstrain
         integrate_material!(chabmat)
         return chabmat.variables_new.stress
@@ -115,12 +118,9 @@ function simple_integration_test_fd_tangent()
     # stress = get_stress(0.25*dstrain_dtime)
     # @info "stress = $stress"
 
+    # https://kristofferc.github.io/Tensors.jl/stable/man/automatic_differentiation/
     # TODO: doesn't work, a Nothing ends up in the type for some reason?
-    #D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
-    #
-    # TODO: doesn't work; could follow the example of our chaboche implementation
-    # and marshal the tensor into a vector, to see if that works.
-    D, dstress = ForwardDiff.jacobian(get_stress, 0.25*dstrain_dtime)
+    D, dstress = Tensors.gradient(get_stress, 0.25*dstrain_dtime, :all)
     @info "D_mat = $(tovoigt(chabmat.variables_new.jacobian))"
     @info "D = $(tovoigt(D))"
 

@@ -1,5 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
+#
+# Low-level definitions for one_elem_disp_chaboche.jl.
 
 mutable struct Continuum3D <: FieldProblem
     material_model :: Symbol

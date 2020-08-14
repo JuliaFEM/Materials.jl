@@ -1,3 +1,8 @@
+# This file is a part of JuliaFEM.
+# License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
+#
+# Some performance benchmarks for the current design for AbstractMaterialState.
+
 using Tensors
 using BenchmarkTools
 
@@ -37,7 +42,8 @@ struct AnotherState <: AbstractMaterialState
    cumeq::Float64
    R::Float64
 end
- function bench_chaboche_style_state(N)
+
+function bench_chaboche_style_state(N)
    stress = zero(Symm2)
    strain = zero(Symm2)
    backstress1 = zero(Symm2)

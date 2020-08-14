@@ -1,3 +1,8 @@
+# This file is a part of JuliaFEM.
+# License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
+#
+# Some performance benchmarks for the current design for AbstractMaterial.
+
 mutable struct Variable{T}
     value :: T
     dvalue :: T
