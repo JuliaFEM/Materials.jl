@@ -321,7 +321,9 @@ let stresses_expected = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     # Interrupt and hold
     # Drive to zero stress
     strain_at_stop = material.drivers.strain[1,1]
-    stress_driven_uniaxial_increment!(material, -material.variables.stress[1,1], dtime)
+    let dstress11 = -material.variables.stress[1,1]
+        stress_driven_uniaxial_increment!(material, dstress11, dtime)
+    end
     update_material!(material)
     snapshot!()
     # Hold for 3600 seconds
@@ -332,7 +334,7 @@ let stresses_expected = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     # Continue test
     dstrain_extra = strain_at_stop - material.drivers.strain[1,1]
     n_extra_steps = Int(ceil(dstrain_extra / dstrain11))
-    for i in n_interrupt + 1:n_steps + n_extra_steps
+    for i in (n_interrupt + 1):(n_steps + n_extra_steps)
         uniaxial_increment!(material, dstrain11, dtime)
         update_material!(material)
         snapshot!()

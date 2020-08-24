@@ -83,22 +83,12 @@ let parameters = MemoryParameterState(E = 200.0e3,
     # Amplitude 4 - evanescence
     ea = 0.003
     strains11 = ea * sin.(2*pi*t)
-    for dstrain11 in diff(strains11)
-        uniaxial_increment!(mat, dstrain11, dtime)
-        update_material!(mat)
-        snapshot!()
-    end
-
-    for dstrain11 in diff(strains11)
-        uniaxial_increment!(mat, dstrain11, dtime)
-        update_material!(mat)
-        snapshot!()
-    end
-
-    for dstrain11 in diff(strains11)
-        uniaxial_increment!(mat, dstrain11, dtime)
-        update_material!(mat)
-        snapshot!()
+    for _ in 1:3
+        for dstrain11 in diff(strains11)
+            uniaxial_increment!(mat, dstrain11, dtime)
+            update_material!(mat)
+            snapshot!()
+        end
     end
 
     R4 = copy(Rs[end])

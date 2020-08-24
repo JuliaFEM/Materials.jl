@@ -18,11 +18,11 @@ let dtime = 0.25,
     mat = Chaboche(parameters = parameters),
     dstrain11 = 1e-3*dtime,
     dstrain12 = 1e-3*dtime,
-    dtimes = [dtime, dtime, dtime, dtime, 1.0],
+    dtimes = dtime*[1.0, 1.0, 1.0, 1.0, 4.0],
     dstrains11 = dstrain11*[1.0, 1.0, 1.0, -1.0, -4.0],
     dstrains12 = dstrain12*[1.0, 1.0, 1.0, -1.0, -4.0]
 
-    plastic_flow_occurred = zeros(Bool, length(dstrains11) - 1)
+    plastic_flow_occurred = zeros(Bool, length(dtimes) - 1)
     for i in 1:length(dtimes)
         dstrain11 = dstrains11[i]
         dstrain12 = dstrains12[i]
