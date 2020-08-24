@@ -278,8 +278,8 @@ let stresses_expected = [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
 
     dstrain11   = 2e-4 * dtime, # Corresponds to 10 MPa elastic stress response
 
-    tostrain(tens) = copy(tovoigt(tens; offdiagscale=2.0)),
-    tostress(tens) = copy(tovoigt(tens)),
+    tostrain(tens::Symm2) = copy(tovoigt(tens; offdiagscale=2.0)),
+    tostress(tens::Symm2) = copy(tovoigt(tens)),
 
     times     = [material.drivers.time],
     stresses  = [tostress(material.variables.stress)],

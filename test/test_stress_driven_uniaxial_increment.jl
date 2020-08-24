@@ -4,9 +4,10 @@
 using Test, Tensors
 
 let dtime = 0.25,
+    R0 = 100.0,
     parameters = ChabocheParameterState(E=200.0e3,
                                         nu=0.3,
-                                        R0=100.0,
+                                        R0=R0,
                                         Kn=100.0,
                                         nn=10.0,
                                         C1=10000.0,
@@ -23,13 +24,13 @@ let dtime = 0.25,
     tostrain(vec) = fromvoigt(Symm2, vec; offdiagscale=2.0),
     tostress(vec) = fromvoigt(Symm2, vec),
     uniaxial_stress(sigma) = tostress([sigma, 0, 0, 0, 0, 0]),
-    stresses_expected = [uniaxial_stress(50.0),
-                         uniaxial_stress(100.0),
-                         uniaxial_stress(150.0),
-                         uniaxial_stress(150.0),
-                         uniaxial_stress(100.0),
-                         uniaxial_stress(-100.0)],
-    dstress = 50.0,
+    stresses_expected = [uniaxial_stress(R0 / 2),
+                         uniaxial_stress(R0),
+                         uniaxial_stress(1.5 * R0),
+                         uniaxial_stress(1.5 * R0),
+                         uniaxial_stress(R0),
+                         uniaxial_stress(-R0)],
+    dstress = R0 / 2,
     dstresses11 = dstress*[1.0, 1.0, 1.0, 0.0, -1.0, -4.0]
     dtimes = [dtime, dtime, dtime, 1e3, dtime, 1e3]
 
@@ -45,9 +46,12 @@ let dtime = 0.25,
         @test isapprox(material.variables.stress, stresses_expected[i]; atol=1e-4)
     end
 
+    # Plastic creep should have occurred at the portion of the test
+    # where the stress was held at 1.5*R0.
     dstrain_creep = strains[5] - strains[4]
-    @test isapprox(dstrain_creep[2], -dstrain_creep[1]*0.5; atol=1e-4)
-    @test isapprox(dstrain_creep[3], -dstrain_creep[1]*0.5; atol=1e-4)
+    # von Mises material, so the plastic nu = 0.5.
+    @test isapprox(dstrain_creep[2], -dstrain_creep[1]*0.5; atol=1e-4)  # ε22 = -0.5 ε11
+    @test isapprox(dstrain_creep[3], -dstrain_creep[1]*0.5; atol=1e-4)  # ε33 = -0.5 ε11
 
     dcumeq = cumeqs[end] - cumeqs[end-1]
     @test dcumeq > 0

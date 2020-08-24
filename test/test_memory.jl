@@ -21,8 +21,8 @@ let parameters = MemoryParameterState(E = 200.0e3,
                                       xi = 0.3),
     mat = Memory(parameters=parameters),
 
-    tostrain(tens) = copy(tovoigt(tens; offdiagscale=2.0)),
-    tostress(tens) = copy(tovoigt(tens)),
+    tostrain(tens::Symm2) = copy(tovoigt(tens; offdiagscale=2.0)),
+    tostress(tens::Symm2) = copy(tovoigt(tens)),
 
     n_cycles = 30,
     points_per_cycle = 40,

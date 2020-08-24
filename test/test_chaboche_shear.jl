@@ -5,9 +5,10 @@ using Test, Tensors
 
 let E = 200.0e3,
     nu = 0.3,
+    yield_strength = 100.0,
     parameters = ChabocheParameterState(E=E,
                                         nu=nu,
-                                        R0=100.0,  # yield in shear = R0 / sqrt(3)
+                                        R0=yield_strength,  # yield in shear = R0 / sqrt(3)
                                         Kn=100.0,
                                         nn=3.0,
                                         C1=0.0,
@@ -21,7 +22,6 @@ let E = 200.0e3,
     loads = [0.0],
     dt = 1.0,
     G = 0.5*E/(1+nu),
-    yield_strength = 100.0,
     # vonMises = sqrt(3 J_2) = sqrt(3/2 tr(s^2)) = sqrt(3) |tau| = sqrt(3)*G*|gamma|
     # gamma = 2 e12
     # set  vonMises = Y
@@ -61,8 +61,8 @@ let E = 200.0e3,
     for i in 1:length(times)
         @test isapprox(stresses[i][1:5], zeros(5); atol=1e-6)
     end
-    s31 = [s[6] for s in stresses]
 
+    s31 = [s[6] for s in stresses]
     @test isapprox(s31[2], yield_strength/sqrt(3.0))
     @test isapprox(s31[3]*sqrt(3.0), yield_strength + 100.0*((eeqs[3] - eeqs[2])/dt)^(1.0/3.0); rtol=1e-2)
     @test isapprox(s31[4], s31[3] - G*gamma_yield*dt)
