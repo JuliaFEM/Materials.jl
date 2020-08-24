@@ -143,6 +143,13 @@ Material model with dynamic strain aging (DSA).
 This is similar to the Chaboche material with two backstresses, with both
 kinematic and isotropic hardening, but this model also features static recovery
 terms.
+
+See:
+
+    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    Viscoplastic constitutive equations of combustion chamber materials including
+    cyclic hardening and dynamic strain aging. International Journal of Plasticity
+    46 (2013), 1--22. http://dx.doi.org/10.1016/j.ijplas.2012.09.011
 """
 function integrate_material!(material::GenericDSA{T}) where T <: Real
     p  = material.parameters
