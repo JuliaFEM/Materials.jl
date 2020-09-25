@@ -1,6 +1,8 @@
 # Materials.jl
 
-Computational material models
+A computational material models package for JuliaFEM, concentrating on plasticity and viscoplasticity.
+
+The public API is defined in [src/Materials.jl](src/Materials.jl). For details, see the docstrings. For usage examples, see the [automated tests](test/).
 
 [![][gitter-img]][gitter-url]
 [![][travis-img]][travis-url]
