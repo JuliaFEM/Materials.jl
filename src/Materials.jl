@@ -10,16 +10,12 @@ export AbstractMaterial, AbstractMaterialState
 export integrate_material!, update_material!, reset_material!
 
 """
-    :+(state::T, dstate::T) where T <: AbstractMaterialState
+    :+(a::T, b::T) where T <: AbstractMaterialState
 
-Addition for material states.
-
-Given two material states `state` and `dstate` of type `T`, add each field of
-`dstate` into the corresponding field of `state`. Return the resulting material
-state.
+Fieldwise addition for material states.
 """
-@generated function Base.:+(state::T, dstate::T) where T <: AbstractMaterialState
-   expr = [:(state.$p + dstate.$p) for p in fieldnames(T)]
+@generated function Base.:+(a::T, b::T) where T <: AbstractMaterialState
+   expr = [:(a.$p + b.$p) for p in fieldnames(T)]
    return :(T($(expr...)))
 end
 
