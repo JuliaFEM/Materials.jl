@@ -20,23 +20,34 @@ export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState
     strain::Symm2{T} = zero(Symm2{T})
 end
 
-# TODO: complete this docstring
 """Parameter state for Memory material.
 
-`E`: Young's modulus
-`nu`: Poisson's ratio
-`R0`: initial yield strength
-`Kn`: plasticity multiplier divisor (drag stress)
-`nn`: plasticity multiplier exponent
-`C1`, `D1`: parameters governing behavior of backstress X1
-`C2`, `D2`: parameters governing behavior of backstress X2
-`Q0`: ???
-`QM`: ???
-`mu`: ???
-`b`: ???
-`eta`: ???
-`m`: ???
-`pt`: memory evanescence threshold for cumulative equivalent plastic strain
+- `E`: Young's modulus
+- `nu`: Poisson's ratio
+- `R0`: initial yield strength
+- `Kn`: plasticity multiplier divisor (drag stress)
+- `nn`: plasticity multiplier exponent
+- `C1`, `D1`: parameters governing behavior of backstress X1
+- `C2`, `D2`: parameters governing behavior of backstress X2
+- `Q0`: The initial isotropic hardening saturation value. Has the units of stress.
+- `QM`: The asymptotic isotropic hardening saturation value reached with high strain amplitude.
+
+  Has the units of stress.
+
+- `mu`: Controls the rate of evolution of the strain-amplitude dependent isotropic hardening saturation value.
+- `b`: Controls the rate of evolution for isotropic hardening.
+- `eta`: Controls the balance between memory surface kinematic and isotropic hardening.
+
+  Dimensionless, support `[0,1]`.
+  At `0`, the memory surface hardens kinematically.
+  At `1`, the memory surface hardens isotropically.
+
+  Initially, the value `1/2` was used by several authors. Later, values `< 1/2` have been suggested
+  to capture the progressive process of memorization.
+
+- `m`: memory evanescence exponent. Controls the non-linearity of the memory evanescence.
+- `pt`: threshold of equivalent plastic strain, after which the memory evanescence starts.
+- `xi`: memory evanescence strength multiplier.
 """
 @with_kw struct GenericMemoryParameterState{T <: Real} <: AbstractMaterialState
     E::T = 0.0
@@ -58,18 +69,17 @@ end
     xi::T = 0.0
 end
 
-# TODO: complete this docstring
 """Problem state for Memory material.
 
-`stress`: stress tensor
-`X1`: backstress 1
-`X2`: backstress 2
-`plastic_strain`: plastic part of strain tensor
-`cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
-`R`: yield strength
-`q`: ???
-`zeta`: ???
-`jacobian`: ∂σij/∂εkl
+- `stress`: stress tensor
+- `X1`: backstress 1
+- `X2`: backstress 2
+- `plastic_strain`: plastic part of strain tensor
+- `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+- `R`: yield strength
+- `q`: size of the strain memory surface (~plastic strain amplitude)
+- `zeta`: strain memory surface kinematic hardening variable
+- `jacobian`: ∂σij/∂εkl
 """
 @with_kw struct GenericMemoryVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
@@ -162,6 +172,10 @@ Material model with a strain memory effect.
 This is similar to the Chaboche material with two backstresses, with both
 kinematic and isotropic hardening, but this model also features a strain
 memory term.
+
+Strain memory is used to be able to model strain amplitude-dependent isotropic
+hardening. In practice, the transition from a tensile test curve to cyclic
+behavior can be captured with this model.
 
 See:
 

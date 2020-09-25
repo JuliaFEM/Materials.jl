@@ -20,20 +20,19 @@ export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableSt
     strain::Symm2{T} = zero(Symm2{T})
 end
 
-# TODO: complete this docstring
 """Parameter state for Chaboche material.
 
 The classical viscoplastic material is a special case of this model with `C1 = C2 = 0`.
 
-`E`: Young's modulus
-`nu`: Poisson's ratio
-`R0`: initial yield strength
-`Kn`: plasticity multiplier divisor (drag stress)
-`nn`: plasticity multiplier exponent
-`C1`, `D1`: parameters governing behavior of backstress X1
-`C2`, `D2`: parameters governing behavior of backstress X2
-`Q`: shift parameter for yield strength evolution
-`b`: multiplier for yield strength evolution
+- `E`: Young's modulus
+- `nu`: Poisson's ratio
+- `R0`: initial yield strength
+- `Kn`: plasticity multiplier divisor (drag stress)
+- `nn`: plasticity multiplier exponent
+- `C1`, `D1`: parameters governing behavior of backstress X1
+- `C2`, `D2`: parameters governing behavior of backstress X2
+- `Q`: hardening saturation state
+- `b`: rate of convergence to hardening saturation
 """
 @with_kw struct GenericChabocheParameterState{T <: Real} <: AbstractMaterialState
     E::T = 0
@@ -51,13 +50,13 @@ end
 
 """Problem state for Chaboche material.
 
-`stress`: stress tensor
-`X1`: backstress 1
-`X2`: backstress 2
-`plastic_strain`: plastic part of strain tensor
-`cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
-`R`: yield strength
-`jacobian`: ∂σij/∂εkl
+- `stress`: stress tensor
+- `X1`: backstress 1
+- `X2`: backstress 2
+- `plastic_strain`: plastic part of strain tensor
+- `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+- `R`: yield strength
+- `jacobian`: ∂σij/∂εkl
 """
 @with_kw struct GenericChabocheVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
@@ -118,16 +117,20 @@ Chaboche material with two backstresses. Both kinematic and isotropic hardening.
 
 See:
 
-    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
-    Viscoplastic constitutive equations of combustion chamber materials including
-    cyclic hardening and dynamic strain aging. International Journal of Plasticity
-    46 (2013), 1--22. http://dx.doi.org/10.1016/j.ijplas.2012.09.011
+    J.-L. Chaboche. Constitutive equations for cyclic plasticity and cyclic
+    viscoplasticity. International Journal of Plasticity 5(3) (1989), 247--302.
+    https://doi.org/10.1016/0749-6419(89)90015-6
 
 Further reading:
 
     J.-L. Chaboche. A review of some plasticity and viscoplasticity constitutive
     theories. International Journal of Plasticity 24 (2008), 1642--1693.
-    http://dx.doi.org/10.1016/j.ijplas.2008.03.009
+    https://dx.doi.org/10.1016/j.ijplas.2008.03.009
+
+    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    Viscoplastic constitutive equations of combustion chamber materials including
+    cyclic hardening and dynamic strain aging. International Journal of Plasticity
+    46 (2013), 1--22. https://dx.doi.org/10.1016/j.ijplas.2012.09.011
 """
 function integrate_material!(material::GenericChaboche{T}) where T <: Real
     p = material.parameters
@@ -162,7 +165,7 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
         seff_dev = dev(stress - X1 - X2)
         f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
 
-        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn  # plasticity multiplier, see equations (3) and (4) in Chaboche et al. 2013
+        dotp = ((f >= 0.0 ? f : 0.0)/Kn)^nn  # power law viscoplasticity (Norton-Bailey type)
         dp = dotp*dtime  # |dε_p|, using backward Euler (dotp is ∂ε_p/∂t at the end of the timestep)
         n = sqrt(1.5)*seff_dev/norm(seff_dev)  # Chaboche: a (tensorial) unit direction, s.t. 2/3 * (n : n) = 1; also n = ∂f/∂σ.
 

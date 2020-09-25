@@ -20,27 +20,67 @@ export DSA, DSADriverState, DSAParameterState, DSAVariableState
     strain::Symm2{T} = zero(Symm2{T})
 end
 
-# TODO: complete this docstring
 """Parameter state for DSA (dynamic strain aging) material.
 
 This is similar to the Chaboche model, but with additional static recovery terms.
 
-`E`: Young's modulus
-`nu`: Poisson's ratio
-`R0`: initial yield strength
-`Kn`: plasticity multiplier divisor (drag stress)
-`nn`: plasticity multiplier exponent
-`C1`, `D1`: parameters governing behavior of backstress X1
-`C2`, `D2`: parameters governing behavior of backstress X2
-`Q`: shift parameter for yield strength evolution
-`b`: multiplier for yield strength evolution
-`w`: ???
-`P1`, `P2`: ???
-`m`: ???
-`m1`, `m2`: ???
-`M1`, `M2`: ???
-`ba`: ???
-`xi`: ???
+Parameters:
+
+  - `E`: Young's modulus
+  - `nu`: Poisson's ratio
+  - `R0`: initial yield strength
+  - `Kn`: plasticity multiplier divisor (drag stress)
+  - `nn`: plasticity multiplier exponent
+  - `C1`, `D1`: parameters governing behavior of backstress X1
+  - `C2`, `D2`: parameters governing behavior of backstress X2
+  - `Q`: shift parameter for yield strength evolution
+  - `b`: multiplier for yield strength evolution
+  - `w`: controls the average waiting time a dislocation is arrested at localized obstacles.
+
+    It represents a strain increment produced when all arrested
+    dislocations overcome localized obstacles, and move toward the next
+    pinned configuration.
+
+    In practice, this parameter controls how fast the effective aging time
+    reacts to plastic flow: \$\\dot{t}_a = 1 - t_a \\dot{p} / w\$
+
+  - `P1`, `P2`: controls the maximum hardening in the fully aged state.
+
+    Has the units of stress.
+
+  - `m`: controls the characteristic diffusion time. Depends on the type of diffusion.
+
+    The value `1/3` is thought to represent pipe diffusion along dislocation lines.
+    Another typical value is `2/3`.
+
+  - `m1`, `m2`: The exponent of the power-law type static recovery of backstresses.
+
+    The static recovery mechanism becomes activated at higher temperatures.
+
+    This parameter controls the secondary creep and constant slope relaxation of
+    stresses over a longer period of time. Higher values (>6..10) effectively
+    deactivate static recovery, whereas lower values (<5) activate it.
+
+  - `M1`, `M2`: The normalizer of the power-law type static recovery of backstresses.
+
+    Has the units of stress. Can be used to activate/deactivate static recovery.
+    Deactivation occurs with high values.
+
+  - `ba`: Controls the rate of evolution of aging stress to its asymptotic value.
+
+    Dimensionless. Similar to the isotropic hardening `b`.
+
+  - `xi`: Controls the magnitude of the Marquis effect from the aging stress.
+
+    The Marquis effect is that increased hardening due to aging shows as
+    increased relaxation.
+
+    Dimensionless. Support `[0,1]`.
+
+    At `0`, the aging stress contributes solely to the size of the yield surface `R`
+    (isotropic hardening).
+
+    At `1`, the aging stress contributes solely to the viscoplastic drag stress `K`.
 """
 @with_kw struct GenericDSAParameterState{T <: Real} <: AbstractMaterialState
     E::T = 0.0
@@ -66,18 +106,17 @@ This is similar to the Chaboche model, but with additional static recovery terms
     xi::T = 0.0
 end
 
-# TODO: complete this docstring
 """Problem state for DSA material.
 
-`stress`: stress tensor
-`X1`: backstress 1
-`X2`: backstress 2
-`plastic_strain`: plastic part of strain tensor
-`cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
-`R`: yield strength
-`ta`: ???
-`Ra`: ???
-`jacobian`: ∂σij/∂εkl
+- `stress`: stress tensor
+- `X1`: backstress 1
+- `X2`: backstress 2
+- `plastic_strain`: plastic part of strain tensor
+- `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+- `R`: yield strength
+- `ta`: effective aging time
+- `Ra`: aging stress
+- `jacobian`: ∂σij/∂εkl
 """
 @with_kw struct GenericDSAVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
@@ -138,11 +177,22 @@ end
 """
     integrate_material!(material::GenericDSA{T}) where T <: Real
 
-Material model with dynamic strain aging (DSA).
+Material model with dynamic strain aging (DSA). This is similar to the Chaboche
+material with two backstresses, with both kinematic and isotropic hardening, but
+this model also features static recovery terms.
 
-This is similar to the Chaboche material with two backstresses, with both
-kinematic and isotropic hardening, but this model also features static recovery
-terms.
+This model captures dynamic (and static) strain aging (DSA) induced hardening.
+The related phenomena are:
+
+  - Portevin le Chatelier effect. Serrated yield, plastic instabilities.
+  - Discontinuous yielding
+  - Inverse strain rate sensitivity (inverse SRS)
+  - Secondary hardening in low cycle fatigue (LCF) tests
+
+These typically occur in a certain temperature/strain rate regime, where the
+dislocations are pinned due to the diffusion of solute atoms. In the most
+effective conditions, the speed of diffusion is comparable to the applied
+strain rate (speed of dislocations).
 
 See:
 
@@ -150,6 +200,12 @@ See:
     Viscoplastic constitutive equations of combustion chamber materials including
     cyclic hardening and dynamic strain aging. International Journal of Plasticity
     46 (2013), 1--22. http://dx.doi.org/10.1016/j.ijplas.2012.09.011
+
+Further reading:
+
+    M. Mazière, H. Dierke. Investigations on the Portevin Le Chatelier critical
+    strain in an aluminum alloy. Computational Materials Science 52(1) (2012),
+    68--72. https://doi.org/10.1016/j.commatsci.2011.05.039
 """
 function integrate_material!(material::GenericDSA{T}) where T <: Real
     p  = material.parameters

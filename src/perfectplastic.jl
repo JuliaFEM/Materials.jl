@@ -20,12 +20,25 @@ export PerfectPlastic, PerfectPlasticDriverState, PerfectPlasticParameterState, 
     strain::Symm2{T} = zero(Symm2{T})
 end
 
+"""Parameter state for perfect plastic material.
+
+- youngs_modulus
+- poissons_ratio
+- yield_stress
+"""
 @with_kw struct GenericPerfectPlasticParameterState{T <: Real} <: AbstractMaterialState
     youngs_modulus::T = zero(T)
     poissons_ratio::T = zero(T)
     yield_stress::T = zero(T)
 end
 
+"""Problem state for perfect plastic material.
+
+- `stress`: stress tensor
+- `plastic_strain`: plastic part of strain tensor
+- `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+- `jacobian`: ∂σij/∂εkl
+"""
 @with_kw struct GenericPerfectPlasticVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
     plastic_strain::Symm2{T} = zero(Symm2{T})
@@ -83,6 +96,7 @@ function integrate_material!(material::GenericPerfectPlastic{T}) where T <: Real
     f = sqrt(1.5)*norm(seff_dev) - R0  # von Mises yield function; f := J(seff_dev) - Y
 
     if f > 0.0
+        # see Simo & Hughes ch. 3.1: radial return mapping, eq. (3.37)
         dp = 1.0/(3.0*mu) * f
         n = sqrt(1.5)*seff_dev/norm(seff_dev)  # a (tensorial) unit direction, s.t. 2/3 * (n : n) = 1
 
@@ -101,9 +115,9 @@ function integrate_material!(material::GenericPerfectPlastic{T}) where T <: Real
         jacobian = ED - otimes(dcontract(ED, n), dcontract(n, ED)) / dcontract(dcontract(n, ED), n)
     end
     variables_new = GenericPerfectPlasticVariableState(stress=stress,
-                                              plastic_strain=plastic_strain,
-                                              cumeq=cumeq,
-                                              jacobian=jacobian)
+                                                       plastic_strain=plastic_strain,
+                                                       cumeq=cumeq,
+                                                       jacobian=jacobian)
     material.variables_new = variables_new
     return nothing
 end
