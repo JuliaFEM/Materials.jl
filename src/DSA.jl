@@ -1,174 +1,369 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-@with_kw mutable struct DSADriverState <: AbstractMaterialState
-    time::Float64 = zero(Float64)
-    strain::SymmetricTensor{2,3} = zero(SymmetricTensor{2,3,Float64})
+module DSAModule
+
+using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
+
+import ..AbstractMaterial, ..AbstractMaterialState
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, lame, debang
+import ..integrate_material!  # for method extension
+
+# parametrically polymorphic for any type representing ℝ
+export GenericDSA, GenericDSADriverState, GenericDSAParameterState, GenericDSAVariableState
+
+# specialization for Float64
+export DSA, DSADriverState, DSAParameterState, DSAVariableState
+
+@with_kw mutable struct GenericDSADriverState{T <: Real} <: AbstractMaterialState
+    time::T = zero(T)
+    strain::Symm2{T} = zero(Symm2{T})
 end
 
-@with_kw struct DSAParameterState <: AbstractMaterialState
-    E::Float64  = 0.0
-    nu::Float64 = 0.0
-    R0::Float64 = 0.0
-    Kn::Float64 = 0.0
-    nn::Float64 = 0.0
-    C1::Float64 = 0.0
-    D1::Float64 = 0.0
-    C2::Float64 = 0.0
-    D2::Float64 = 0.0
-    Q::Float64  = 0.0
-    b::Float64  = 0.0
-    w::Float64  = 0.0
-    P1::Float64 = 0.0
-    P2::Float64 = 0.0
-    m::Float64  = 0.0
-    m1::Float64 = 0.0
-    m2::Float64 = 0.0
-    M1::Float64 = 0.0
-    M2::Float64 = 0.0
-    ba::Float64 = 0.0
-    xi::Float64 = 0.0
+"""Parameter state for DSA (dynamic strain aging) material.
+
+This is similar to the Chaboche model, but with additional static recovery terms.
+
+Parameters:
+
+  - `E`: Young's modulus
+  - `nu`: Poisson's ratio
+  - `R0`: initial yield strength
+  - `Kn`: plasticity multiplier divisor (drag stress)
+  - `nn`: plasticity multiplier exponent
+  - `C1`, `D1`: parameters governing behavior of backstress X1
+  - `C2`, `D2`: parameters governing behavior of backstress X2
+  - `Q`: shift parameter for yield strength evolution
+  - `b`: multiplier for yield strength evolution
+  - `w`: controls the average waiting time a dislocation is arrested at localized obstacles.
+
+    It represents a strain increment produced when all arrested
+    dislocations overcome localized obstacles, and move toward the next
+    pinned configuration.
+
+    In practice, this parameter controls how fast the effective aging time
+    reacts to plastic flow: \$\\dot{t}_a = 1 - t_a \\dot{p} / w\$
+
+  - `P1`, `P2`: controls the maximum hardening in the fully aged state.
+
+    Has the units of stress.
+
+  - `m`: controls the characteristic diffusion time. Depends on the type of diffusion.
+
+    The value `1/3` is thought to represent pipe diffusion along dislocation lines.
+    Another typical value is `2/3`.
+
+  - `m1`, `m2`: The exponent of the power-law type static recovery of backstresses.
+
+    The static recovery mechanism becomes activated at higher temperatures.
+
+    This parameter controls the secondary creep and constant slope relaxation of
+    stresses over a longer period of time. Higher values (>6..10) effectively
+    deactivate static recovery, whereas lower values (<5) activate it.
+
+  - `M1`, `M2`: The normalizer of the power-law type static recovery of backstresses.
+
+    Has the units of stress. Can be used to activate/deactivate static recovery.
+    Deactivation occurs with high values.
+
+  - `ba`: Controls the rate of evolution of aging stress to its asymptotic value.
+
+    Dimensionless. Similar to the isotropic hardening `b`.
+
+  - `xi`: Controls the magnitude of the Marquis effect from the aging stress.
+
+    The Marquis effect is that increased hardening due to aging shows as
+    increased relaxation.
+
+    Dimensionless. Support `[0,1]`.
+
+    At `0`, the aging stress contributes solely to the size of the yield surface `R`
+    (isotropic hardening).
+
+    At `1`, the aging stress contributes solely to the viscoplastic drag stress `K`.
+"""
+@with_kw struct GenericDSAParameterState{T <: Real} <: AbstractMaterialState
+    E::T = 0.0
+    nu::T = 0.0
+    R0::T = 0.0
+    Kn::T = 0.0
+    nn::T = 0.0
+    C1::T = 0.0
+    D1::T = 0.0
+    C2::T = 0.0
+    D2::T = 0.0
+    Q::T = 0.0
+    b::T = 0.0
+    w::T = 0.0
+    P1::T = 0.0
+    P2::T = 0.0
+    m::T = 0.0
+    m1::T = 0.0
+    m2::T = 0.0
+    M1::T = 0.0
+    M2::T = 0.0
+    ba::T = 0.0
+    xi::T = 0.0
 end
 
-@with_kw struct DSAVariableState <: AbstractMaterialState
-    stress::SymmetricTensor{2,3}          = zero(SymmetricTensor{2,3,Float64})
-    X1::SymmetricTensor{2,3}              = zero(SymmetricTensor{2,3,Float64})
-    X2::SymmetricTensor{2,3}              = zero(SymmetricTensor{2,3,Float64})
-    plastic_strain::SymmetricTensor{2,3}  = zero(SymmetricTensor{2,3,Float64})
-    cumeq::Float64                        = zero(Float64)
-    R::Float64                            = zero(Float64)
-    jacobian::SymmetricTensor{4,3}        = zero(SymmetricTensor{4,3,Float64})
-    ta::Float64                           = zero(Float64)
-    Ra::Float64                           = zero(Float64)
+"""Problem state for DSA material.
+
+- `stress`: stress tensor
+- `X1`: backstress 1
+- `X2`: backstress 2
+- `plastic_strain`: plastic part of strain tensor
+- `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
+- `R`: yield strength
+- `ta`: effective aging time
+- `Ra`: aging stress
+- `jacobian`: ∂σij/∂εkl
+"""
+@with_kw struct GenericDSAVariableState{T <: Real} <: AbstractMaterialState
+    stress::Symm2{T} = zero(Symm2{T})
+    X1::Symm2{T} = zero(Symm2{T})
+    X2::Symm2{T} = zero(Symm2{T})
+    plastic_strain::Symm2{T} = zero(Symm2{T})
+    cumeq::T = zero(T)
+    R::T = zero(T)
+    ta::T = zero(T)
+    Ra::T = zero(T)
+    jacobian::Symm4{T} = zero(Symm4{T})
 end
 
-@with_kw mutable struct DSA <: AbstractMaterial
-    drivers::DSADriverState           = DSADriverState()
-    ddrivers::DSADriverState          = DSADriverState()
-    variables::DSAVariableState       = DSAVariableState()
-    variables_new::DSAVariableState   = DSAVariableState()
-    parameters::DSAParameterState     = DSAParameterState()
-    dparameters::DSAParameterState    = DSAParameterState()
+# TODO: Does this eventually need a {T}?
+@with_kw struct DSAOptions <: AbstractMaterialState
+    nlsolve_method::Symbol = :trust_region
 end
 
-function integrate_material!(material::DSA)
+@with_kw mutable struct GenericDSA{T <: Real} <: AbstractMaterial
+    drivers::GenericDSADriverState{T} = GenericDSADriverState{T}()
+    ddrivers::GenericDSADriverState{T} = GenericDSADriverState{T}()
+    variables::GenericDSAVariableState{T} = GenericDSAVariableState{T}()
+    variables_new::GenericDSAVariableState{T} = GenericDSAVariableState{T}()
+    parameters::GenericDSAParameterState{T} = GenericDSAParameterState{T}()
+    dparameters::GenericDSAParameterState{T} = GenericDSAParameterState{T}()
+    options::DSAOptions = DSAOptions()
+end
+
+DSADriverState = GenericDSADriverState{Float64}
+DSAParameterState = GenericDSAParameterState{Float64}
+DSAVariableState = GenericDSAVariableState{Float64}
+DSA = GenericDSA{Float64}
+
+"""
+    state_to_vector(sigma::U, R::T, X1::U, X2::U, ta::T, Ra::T) where U <: Symm2{T} where T <: Real
+
+Adaptor for `nlsolve`. Marshal the problem state into a `Vector`.
+"""
+function state_to_vector(sigma::U, R::T, X1::U, X2::U, ta::T, Ra::T) where U <: Symm2{T} where T <: Real
+    return [tovoigt(sigma); R; tovoigt(X1); tovoigt(X2); ta; Ra]::Vector{T}
+end
+
+"""
+    state_from_vector(x::AbstractVector{<:Real})
+
+Adaptor for `nlsolve`. Unmarshal the problem state from a `Vector`.
+"""
+function state_from_vector(x::AbstractVector{T}) where T <: Real
+    sigma::Symm2{T} = fromvoigt(Symm2{T}, @view x[1:6])
+    R::T = x[7]
+    X1::Symm2{T} = fromvoigt(Symm2{T}, @view x[8:13])
+    X2::Symm2{T} = fromvoigt(Symm2{T}, @view x[14:19])
+    ta::T = x[20]
+    Ra::T = x[21]
+    return sigma, R, X1, X2, ta, Ra
+end
+
+"""
+    integrate_material!(material::GenericDSA{T}) where T <: Real
+
+Material model with dynamic strain aging (DSA). This is similar to the Chaboche
+material with two backstresses, with both kinematic and isotropic hardening, but
+this model also features static recovery terms.
+
+This model captures dynamic (and static) strain aging (DSA) induced hardening.
+The related phenomena are:
+
+  - Portevin le Chatelier effect. Serrated yield, plastic instabilities.
+  - Discontinuous yielding
+  - Inverse strain rate sensitivity (inverse SRS)
+  - Secondary hardening in low cycle fatigue (LCF) tests
+
+These typically occur in a certain temperature/strain rate regime, where the
+dislocations are pinned due to the diffusion of solute atoms. In the most
+effective conditions, the speed of diffusion is comparable to the applied
+strain rate (speed of dislocations).
+
+See:
+
+    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    Viscoplastic constitutive equations of combustion chamber materials including
+    cyclic hardening and dynamic strain aging. International Journal of Plasticity
+    46 (2013), 1--22. http://dx.doi.org/10.1016/j.ijplas.2012.09.011
+
+Further reading:
+
+    M. Mazière, H. Dierke. Investigations on the Portevin Le Chatelier critical
+    strain in an aluminum alloy. Computational Materials Science 52(1) (2012),
+    68--72. https://doi.org/10.1016/j.commatsci.2011.05.039
+"""
+function integrate_material!(material::GenericDSA{T}) where T <: Real
     p  = material.parameters
     v  = material.variables
     dd = material.ddrivers
     d  = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
-    mu     = E / ( 2.0 * (1.0 + nu) )
-    lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
+    lambda, mu = lame(E, nu)
+
     @unpack strain, time = d
     dstrain  = dd.strain
     dtime    = dd.time
     @unpack stress, X1, X2, plastic_strain, cumeq, R, jacobian, ta, Ra = v
 
+    # elastic part
     jacobian = isotropic_elasticity_tensor(lambda, mu)
     stress  += dcontract(jacobian, dstrain)
-    seff     = stress - X1 - X2
-    seff_dev = dev(seff)
-    f        = sqrt(1.5) * norm(seff_dev) - (R0 + R + (1 - xi) * Ra)
 
+    # resulting deviatoric plastic stress (accounting for backstresses Xm)
+    seff_dev = dev(stress - X1 - X2)
+    # von Mises yield function
+    f = sqrt(1.5)*norm(seff_dev) - (R0 + R + (1 - xi) * Ra)  # using elastic trial problem state
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
-        x0 = [tovoigt(stress); R; tovoigt(X1); tovoigt(X2); ta + dtime; Ra]
-        F = similar(x0)
-        res = nlsolve(g!, x0; autodiff = :forward)
+        x0 = state_to_vector(stress, R, X1, X2, ta + dtime, Ra)
+        res = nlsolve(g!, x0; method=material.options.nlsolve_method, autodiff = :forward)
+        converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
-        res.f_converged || error("Nonlinear system of equations did not converge!")
+        stress, R, X1, X2, ta, Ra = state_from_vector(x)
 
-        stress = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[1:6])
-        R  = x[7]
-        X1 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[8:13])
-        X2 = fromvoigt(SymmetricTensor{2,3,Float64}, @view x[14:19])
-        ta = x[20]
-        Ra = x[21]
+        # using the new problem state
+        seff_dev = dev(stress - X1 - X2)
+        f = sqrt(1.5)*norm(seff_dev) - (R0 + R + (1 - xi) * Ra)
 
-        seff     = stress - X1 - X2
-        seff_dev = dev(seff)
-        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R + (1 - xi) * Ra )
-        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + xi * Ra) )^nn
-        dp       = dotp * dtime
-        n        = sqrt(1.5) * seff_dev / norm(seff_dev)
-        plastic_strain += dp * n
+        dotp = ((f >= 0.0 ? f : 0.0) / (Kn + xi * Ra))^nn
+        dp = dotp*dtime
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)
+
+        plastic_strain += dp*n
         cumeq += dp
 
-        function residuals(x) # Compute Jacobian
-            F = similar(x)
-            g!(F, x)
-            return F
-        end
-        drdx = ForwardDiff.jacobian(residuals, x)
+        # Compute the new Jacobian, accounting for the plastic contribution.
+        drdx = ForwardDiff.jacobian(debang(g!), x)
         drde = zeros((length(x), 6))
-        drde[1:6, 1:6] = -tovoigt(jacobian)
-        jacobian = fromvoigt(SymmetricTensor{4,3}, (drdx \ drde)[1:6, 1:6])
+        drde[1:6, 1:6] = -tovoigt(jacobian)  # elastic Jacobian. Follows from the defn. of g!.
+        jacobian = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     else
         ta += dtime
-    end 
-    variables_new = DSAVariableState(stress = stress, X1 = X1, X2 = X2, R = R, plastic_strain = plastic_strain, cumeq = cumeq, jacobian = jacobian, ta = ta, Ra = Ra)
+    end
+    variables_new = GenericDSAVariableState{T}(stress = stress,
+                                               X1 = X1,
+                                               X2 = X2,
+                                               R = R,
+                                               plastic_strain = plastic_strain,
+                                               cumeq = cumeq,
+                                               jacobian = jacobian,
+                                               ta = ta,
+                                               Ra = Ra)
     material.variables_new = variables_new
+    return nothing
 end
 
-function create_nonlinear_system_of_equations(material::DSA)
+"""
+    create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <: Real
+
+Create and return an instance of the equation system for the incremental form of
+the evolution equations of the DSA material.
+
+Used internally for computing the plastic contribution in `integrate_material!`.
+
+The input `material` represents the problem state at the end of the previous
+timestep. The created equation system will hold its own copy of that state.
+
+The equation system is represented as a mutating function `g!` that computes the
+residual:
+
+```julia
+    g!(F::V, x::V) where V <: AbstractVector{<:Real}
+```
+
+Both `F` (output) and `x` (input) are length-21 vectors containing
+[sigma, R, X1, X2, ta, Ra], in that order. The tensor quantities
+sigma, X1, X2 are encoded in Voigt format.
+
+The function `g!` is intended to be handed over to `nlsolve`.
+"""
+function create_nonlinear_system_of_equations(material::GenericDSA{T}) where T <: Real
     p  = material.parameters
     v  = material.variables
     dd = material.ddrivers
     d  = material.drivers
     @unpack E, nu, R0, Kn, nn, C1, D1, C2, D2, Q, b, w, P1, P2, m, m1, m2, M1, M2, ba, xi = p
-    mu     = E / ( 2.0 * (1.0 + nu) )
-    lambda = E * nu / ( (1.0 + nu) * (1.0 - 2.0 * nu) )
+    lambda, mu = lame(E, nu)
+
+    # Old problem state (i.e. the problem state at the time when this equation
+    # system instance was created).
+    #
+    # Note this does not include the elastic trial; this is the state at the
+    # end of the previous timestep.
     @unpack strain, time = d
     dstrain = dd.strain
     dtime = dd.time
     @unpack stress, X1, X2, plastic_strain, cumeq, R, ta, Ra = v
 
-    function g!(F, x::Vector{T}) where {T} # System of non-linear equations
-        stress_  = fromvoigt(SymmetricTensor{2,3,T}, @view x[1:6])
-        R_  = x[7]
-        X1_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[8:13])
-        X2_ = fromvoigt(SymmetricTensor{2,3,T}, @view x[14:19])
-        ta_ = x[20]
-        Ra_ = x[21]
+    jacobian = isotropic_elasticity_tensor(lambda, mu)
 
-        jacobian = isotropic_elasticity_tensor(lambda, mu)
-        seff     = stress_ - X1_ - X2_
-        seff_dev = dev(seff)
-        f        = sqrt(1.5) * norm(seff_dev) - ( R0 + R_ + (1 - xi) * Ra_ )
-        dotp     = ( (f >= 0.0 ? f : 0.0) / (Kn + xi * Ra_) )^nn
-        dp       = dotp * dtime
-        n        = sqrt(1.5) * seff_dev / norm(seff_dev)
-        Ras      = P1 * (1.0 - exp(-P2 * ta_^m))
-        dstrain_plastic = dp * n
+    # Compute the residual. F is output, x is filled by NLsolve.
+    # The solution is x = x* such that g(x*) = 0.
+    function g!(F::V, x::V) where V <: AbstractVector{<:Real}
+        stress_new, R_new, X1_new, X2_new, ta_new, Ra_new = state_from_vector(x)  # tentative new values from nlsolve
 
-        tovoigt!(view(F, 1:6), stress - stress_ + dcontract(jacobian, dstrain - dstrain_plastic))
-        F[7] = R - R_ + b * ( Q - R_ ) * dp
-        if isapprox(C1, 0.0)
-            tovoigt!(view(F, 8:13), X1 - X1_)
+        seff_dev = dev(stress_new - X1_new - X2_new)
+        f = sqrt(1.5)*norm(seff_dev) - (R0 + R_new + (1 - xi) * Ra_new)
+
+        dotp = ((f >= 0.0 ? f : 0.0) / (Kn + xi * Ra_new))^nn
+        dp = dotp*dtime
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)
+
+        # The equations are written in an incremental form.
+        # TODO: multiply the equations by -1 to make them easier to understand in the context of the rest of the model.
+
+        dstrain_plastic = dp*n
+        dstrain_elastic = dstrain - dstrain_plastic
+        tovoigt!(view(F, 1:6), stress - stress_new + dcontract(jacobian, dstrain_elastic))
+
+        F[7] = R - R_new + b*(Q - R_new)*dp
+
+        # HACK: The zero special case is needed here to make ForwardDiff happy.
+        #
+        # Otherwise, when ndX1_new = 0, the components 2:end of the automatic
+        # derivative of JX1_new will be NaN, which causes the calculation of the
+        # material jacobian to silently fail. This usually manifests itself as a
+        # mysterious convergence failure, when this model is used in the strain
+        # optimizer.
+        ndX1_new = norm(dev(X1_new))
+        if iszero(ndX1_new)
+            JX1_new = 0.0
         else
-            ndX1_ = norm(dev(X1_)) # Static recovery component
-            if iszero(ndX1_)
-                JX1_ = 0.0
-            else
-                JX1_ = sqrt(1.5) * ndX1_
-            end
-            sr1_ = ( JX1_^(m1 - 1) * X1_ ) / (M1^m1)
-            tovoigt!(view(F, 8:13), X1 - X1_ + 2.0 / 3.0 * C1 * dp * ( n - 1.5 * D1 / C1 * X1_ ) - dtime * sr1_)
+            JX1_new = sqrt(1.5) * ndX1_new
         end
-        if isapprox(C2, 0.0)
-            tovoigt!(view(F, 14:19), X2 - X2_)
+        sr1_new = (JX1_new^(m1 - 1) * X1_new) / (M1^m1)  # static recovery term
+        tovoigt!(view(F, 8:13), X1 - X1_new + dp*(2.0/3.0*C1*n - D1*X1_new) - dtime*sr1_new)
+
+        ndX2_new = norm(dev(X2_new))
+        if iszero(ndX2_new)
+            JX2_new = 0.0
         else
-            ndX2_ = norm(dev(X2_)) # Static recovery component
-            if iszero(ndX2_)
-                JX2_ = 0.0
-            else
-                JX2_ = sqrt(1.5) * ndX2_
-            end
-            sr2_ = ( JX2_^(m2 - 1) * X2_ ) / (M2^m2)
-            tovoigt!(view(F, 14:19), X2 - X2_ + 2.0 / 3.0 * C2 * dp * ( n - 1.5 * D2 / C2 * X2_ ) - dtime * sr2_)
+            JX2_new = sqrt(1.5) * ndX2_new
         end
-        F[20] = ta - ta_ + dtime - (ta_ / w) * dp
-        F[21] = Ra - Ra_ + ba * (Ras - Ra_) * dp
+        sr2_new = (JX2_new^(m2 - 1) * X2_new) / (M2^m2)  # static recovery term
+        tovoigt!(view(F, 14:19), X2 - X2_new + dp*(2.0/3.0*C2*n - D2*X2_new) - dtime*sr2_new)
+
+        Ras = P1 * (1.0 - exp(-P2 * ta_new^m))
+        F[20] = ta - ta_new + dtime - (ta_new / w)*dp
+        F[21] = Ra - Ra_new + ba*(Ras - Ra_new)*dp
+        return nothing
     end
     return g!
+end
+
 end

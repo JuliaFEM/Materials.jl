@@ -4,37 +4,34 @@
 using Materials, Test
 
 @testset "Test Materials.jl" begin
-    # @testset "test abstract material" begin
-    #     include("test_abstract_material.jl")
-    # end
-    @testset "test ideal plastic material model" begin
-        include("test_idealplastic.jl")
+    @testset "test utilities" begin
+        include("test_utilities.jl")
     end
-    @testset "test ideal plastic pure shear" begin
-        include("test_idealplastic_shear.jl")
+    @testset "test perfect plastic uniaxial stress" begin
+        include("test_perfectplastic.jl")
     end
-    @testset "test uniaxial increment" begin
-        include("test_uniaxial_increment.jl")
-    end
-    @testset "test chaboche pure shear" begin
-        include("test_chaboche_shear.jl")
+    @testset "test perfect plastic pure shear" begin
+        include("test_perfectplastic_shear.jl")
     end
     @testset "test chaboche uniaxial stress" begin
         include("test_chaboche.jl")
     end
-    @testset "test biaxial increment" begin
-        include("test_biaxial_increment.jl")
+    @testset "test chaboche pure shear" begin
+        include("test_chaboche_shear.jl")
     end
-    @testset "test memory" begin
+    @testset "test memory material model" begin
         include("test_memory.jl")
-    end
-    @testset "test stress-driven uniaxial increment" begin
-        include("test_stress_driven_uniaxial_increment.jl")
     end
     @testset "test DSA material model" begin
         include("test_DSA.jl")
     end
-    # @testset "test viscoplastic material model" begin
-    #     include("test_viscoplastic.jl")
-    # end
+    @testset "test uniaxial increment" begin
+        include("test_uniaxial_increment.jl")
+    end
+    @testset "test biaxial increment" begin
+        include("test_biaxial_increment.jl")
+    end
+    @testset "test stress-driven uniaxial increment" begin
+        include("test_stress_driven_uniaxial_increment.jl")
+    end
 end

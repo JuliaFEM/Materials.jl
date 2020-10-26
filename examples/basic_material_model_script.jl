@@ -1,3 +1,6 @@
+# An example of the Chaboche material model using just 2-dimensional Arrays
+# (no tensors or Materials.jl).
+
 using LinearAlgebra
 using Einsum
 using Test
