@@ -72,7 +72,7 @@ end
 include("utilities.jl")
 using .Utilities
 export Symm2, Symm4
-export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor, isotropic_compliance_tensor
+export delta, I2, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor, isotropic_compliance_tensor
 export lame, delame, debang, find_root
 
 include("perfectplastic.jl")
