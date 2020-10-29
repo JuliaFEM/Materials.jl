@@ -83,6 +83,10 @@ include("chaboche.jl")
 using .ChabocheModule
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
+include("chabochethermal.jl")
+using .ChabocheThermalModule
+export ChabocheThermal, ChabocheThermalDriverState, ChabocheThermalParameterState, ChabocheThermalVariableState
+
 include("memory.jl")
 using .MemoryModule
 export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState

@@ -1,7 +1,7 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
-module ChabocheModule
+module ChabocheThermalModule
 
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 
@@ -10,18 +10,18 @@ import ..Utilities: Symm2, Symm4, I2, isotropic_elasticity_tensor, isotropic_com
 import ..integrate_material!  # for method extension
 
 # parametrically polymorphic for any type representing ℝ
-export GenericChaboche, GenericChabocheDriverState, GenericChabocheParameterState, GenericChabocheVariableState
+export GenericChabocheThermal, GenericChabocheThermalDriverState, GenericChabocheThermalParameterState, GenericChabocheThermalVariableState
 
 # specialization for Float64
-export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
+export ChabocheThermal, ChabocheThermalDriverState, ChabocheThermalParameterState, ChabocheThermalVariableState
 
-@with_kw mutable struct GenericChabocheDriverState{T <: Real} <: AbstractMaterialState
+@with_kw mutable struct GenericChabocheThermalDriverState{T <: Real} <: AbstractMaterialState
     time::T = zero(T)
     strain::Symm2{T} = zero(Symm2{T})
     temperature::T = zero(T)
 end
 
-"""Parameter state for Chaboche material.
+"""Parameter state for ChabocheThermal material.
 
 The classical viscoplastic material is a special case of this model with `C1 = C2 = 0`.
 
@@ -43,7 +43,7 @@ temperature.
 - `Q`: isotropic hardening saturation state (has the units of stress)
 - `b`: rate of convergence to isotropic hardening saturation (dimensionless)
 """
-@with_kw struct GenericChabocheParameterState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericChabocheThermalParameterState{T <: Real} <: AbstractMaterialState
     theta0::T = zero(T)
     E::Function = (theta::Real -> zero(T))
     nu::Function = (theta::Real -> zero(T))
@@ -62,7 +62,7 @@ temperature.
     b::Function = (theta::Real -> zero(T))
 end
 
-"""Problem state for Chaboche material.
+"""Problem state for ChabocheThermal material.
 
 - `stress`: stress tensor
 - `X1`: backstress 1
@@ -73,7 +73,7 @@ end
 - `R`: yield strength
 - `jacobian`: ∂σij/∂εkl
 """
-@with_kw struct GenericChabocheVariableState{T <: Real} <: AbstractMaterialState
+@with_kw struct GenericChabocheThermalVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
     X1::Symm2{T} = zero(Symm2{T})
     X2::Symm2{T} = zero(Symm2{T})
@@ -85,24 +85,24 @@ end
 end
 
 # TODO: Does this eventually need a {T}?
-@with_kw struct ChabocheOptions <: AbstractMaterialState
+@with_kw struct ChabocheThermalOptions <: AbstractMaterialState
     nlsolve_method::Symbol = :trust_region
 end
 
-@with_kw mutable struct GenericChaboche{T <: Real} <: AbstractMaterial
-    drivers::GenericChabocheDriverState{T} = GenericChabocheDriverState{T}()
-    ddrivers::GenericChabocheDriverState{T} = GenericChabocheDriverState{T}()
-    variables::GenericChabocheVariableState{T} = GenericChabocheVariableState{T}()
-    variables_new::GenericChabocheVariableState{T} = GenericChabocheVariableState{T}()
-    parameters::GenericChabocheParameterState{T} = GenericChabocheParameterState{T}()
-    dparameters::GenericChabocheParameterState{T} = GenericChabocheParameterState{T}()
-    options::ChabocheOptions = ChabocheOptions()
+@with_kw mutable struct GenericChabocheThermal{T <: Real} <: AbstractMaterial
+    drivers::GenericChabocheThermalDriverState{T} = GenericChabocheThermalDriverState{T}()
+    ddrivers::GenericChabocheThermalDriverState{T} = GenericChabocheThermalDriverState{T}()
+    variables::GenericChabocheThermalVariableState{T} = GenericChabocheThermalVariableState{T}()
+    variables_new::GenericChabocheThermalVariableState{T} = GenericChabocheThermalVariableState{T}()
+    parameters::GenericChabocheThermalParameterState{T} = GenericChabocheThermalParameterState{T}()
+    dparameters::GenericChabocheThermalParameterState{T} = GenericChabocheThermalParameterState{T}()
+    options::ChabocheThermalOptions = ChabocheThermalOptions()
 end
 
-ChabocheDriverState = GenericChabocheDriverState{Float64}
-ChabocheParameterState = GenericChabocheParameterState{Float64}
-ChabocheVariableState = GenericChabocheVariableState{Float64}
-Chaboche = GenericChaboche{Float64}
+ChabocheThermalDriverState = GenericChabocheThermalDriverState{Float64}
+ChabocheThermalParameterState = GenericChabocheThermalParameterState{Float64}
+ChabocheThermalVariableState = GenericChabocheThermalVariableState{Float64}
+ChabocheThermal = GenericChabocheThermal{Float64}
 
 """
     state_to_vector(sigma::U, R::T, X1::U, X2::U, X3::U) where U <: Symm2{T} where T <: Real
@@ -169,28 +169,28 @@ function create_bulk_modulus(E::Function, nu::Function)
 end
 
 """
-    integrate_material!(material::GenericChaboche{T}) where T <: Real
+    integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
 
-Chaboche material with two backstresses. Both kinematic and isotropic hardening.
+ChabocheThermal material with two backstresses. Both kinematic and isotropic hardening.
 
 See:
 
-    J.-L. Chaboche. Constitutive equations for cyclic plasticity and cyclic
+    J.-L. ChabocheThermal. Constitutive equations for cyclic plasticity and cyclic
     viscoplasticity. International Journal of Plasticity 5(3) (1989), 247--302.
     https://doi.org/10.1016/0749-6419(89)90015-6
 
 Further reading:
 
-    J.-L. Chaboche. A review of some plasticity and viscoplasticity constitutive
+    J.-L. ChabocheThermal. A review of some plasticity and viscoplasticity constitutive
     theories. International Journal of Plasticity 24 (2008), 1642--1693.
     https://dx.doi.org/10.1016/j.ijplas.2008.03.009
 
-    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    J.-L. ChabocheThermal, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
     Viscoplastic constitutive equations of combustion chamber materials including
     cyclic hardening and dynamic strain aging. International Journal of Plasticity
     46 (2013), 1--22. https://dx.doi.org/10.1016/j.ijplas.2012.09.011
 """
-function integrate_material!(material::GenericChaboche{T}) where T <: Real
+function integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
@@ -255,7 +255,7 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
         nn = nnf(temperature_new)
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn  # power law viscoplasticity (Norton-Bailey type)
         dp = dotp*dtime  # |dε_p|, using backward Euler (dotp is ∂ε_p/∂t at the end of the timestep)
-        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # Chaboche: a (tensorial) unit direction, s.t. 2/3 * (n : n) = 1; also n = ∂f/∂σ.
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # ChabocheThermal: a (tensorial) unit direction, s.t. 2/3 * (n : n) = 1; also n = ∂f/∂σ.
 
         plastic_strain += dp*n
         cumeq += dp   # cumulative equivalent plastic strain (note dp ≥ 0)
@@ -273,7 +273,7 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
         drde[1:6, 1:6] = tovoigt(D)  # elastic Jacobian. Follows from the defn. of g!.
         D = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
     end
-    variables_new = GenericChabocheVariableState{T}(stress = stress,
+    variables_new = GenericChabocheThermalVariableState{T}(stress = stress,
                                                     X1 = X1,
                                                     X2 = X2,
                                                     X3 = X3,
@@ -286,10 +286,10 @@ function integrate_material!(material::GenericChaboche{T}) where T <: Real
 end
 
 """
-    create_nonlinear_system_of_equations(material::GenericChaboche{T}) where T <: Real
+    create_nonlinear_system_of_equations(material::GenericChabocheThermal{T}) where T <: Real
 
 Create and return an instance of the equation system for the incremental form of
-the evolution equations of the Chaboche material.
+the evolution equations of the ChabocheThermal material.
 
 Used internally for computing the plastic contribution in `integrate_material!`.
 
@@ -309,7 +309,7 @@ X1, X2, X3 are encoded in Voigt format.
 
 The function `g!` is intended to be handed over to `nlsolve`.
 """
-function create_nonlinear_system_of_equations(material::GenericChaboche{T}) where T <: Real
+function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T}) where T <: Real
     p = material.parameters
     v = material.variables
     dd = material.ddrivers
