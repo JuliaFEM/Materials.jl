@@ -47,7 +47,7 @@ automatically invoke `reset_material!`.
 """
 function update_material!(material::AbstractMaterial)
     material.drivers += material.ddrivers
-    material.parameters += material.dparameters
+#    material.parameters += material.dparameters  # TODO: fix this
     material.variables = material.variables_new
     reset_material!(material)
     return nothing
