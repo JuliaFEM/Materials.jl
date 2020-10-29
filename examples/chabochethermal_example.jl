@@ -51,29 +51,29 @@ let
         #
         # See also:
         #     https://www.engineeringtoolbox.com/linear-expansion-coefficients-d_95.html
-        parameters = ChabocheParameterState(theta0=T0,
-                                            E=capped_linear(T0, 200.0e3, T1, 100.0e3),
-                                            nu=capped_linear(T0, 0.3, T1, 0.35),
-                                            alpha=capped_linear(T0, 1.216e-5, T1, 1.680e-5),
-                                            R0=capped_linear(T0, 100.0, T1, 50.0),
-                                            # viscous hardening in constant strain rate test: (tvp * ε')^(1/nn) * Kn
-                                            tvp=1000.0,
-                                            Kn=capped_linear(T0, 100.0, T1, 50.0),
-                                            nn=capped_linear(T0, 1.0, T1, 4.0),
-                                            # C1=constant(10000.0),
-                                            # D1=constant(100.0),
-                                            # C2=constant(50000.0),
-                                            # D2=constant(1000.0),
-                                            C1=constant(0.0),
-                                            D1=constant(0.0),
-                                            C2=constant(0.0),
-                                            D2=constant(0.0),
-                                            C3=constant(0.0),
-                                            D3=constant(0.0),
-                                            Q=capped_linear(T0, 50.0, T1, 10.0),
-                                            b=capped_linear(T0, 100.0, T1, 0.01)),
-                                            # Q=constant(0.0),
-                                            # b=constant(0.0)),
+        parameters = ChabocheThermalParameterState(theta0=T0,
+                                                   E=capped_linear(T0, 200.0e3, T1, 100.0e3),
+                                                   nu=capped_linear(T0, 0.3, T1, 0.35),
+                                                   alpha=capped_linear(T0, 1.216e-5, T1, 1.680e-5),
+                                                   R0=capped_linear(T0, 100.0, T1, 50.0),
+                                                   # viscous hardening in constant strain rate test: (tvp * ε')^(1/nn) * Kn
+                                                   tvp=1000.0,
+                                                   Kn=capped_linear(T0, 100.0, T1, 50.0),
+                                                   nn=capped_linear(T0, 1.0, T1, 4.0),
+                                                   # C1=constant(10000.0),
+                                                   # D1=constant(100.0),
+                                                   # C2=constant(50000.0),
+                                                   # D2=constant(1000.0),
+                                                   C1=constant(0.0),
+                                                   D1=constant(0.0),
+                                                   C2=constant(0.0),
+                                                   D2=constant(0.0),
+                                                   C3=constant(0.0),
+                                                   D3=constant(0.0),
+                                                   Q=capped_linear(T0, 50.0, T1, 10.0),
+                                                   b=capped_linear(T0, 100.0, T1, 0.01)),
+                                                   # Q=constant(0.0),
+                                                   # b=constant(0.0)),
         # uniaxial pull test, so we set only dε11.
         strain_rate=1e-4,  # dε/dt [1/s]
         strain_final=0.005,  # when to stop the pull test
@@ -88,7 +88,7 @@ let
         println("Constant temperature tests")
         for T in constant_temperatures
             println("T = $(degreesC(T))°C")
-            mat = Chaboche(parameters=parameters)
+            mat = ChabocheThermal(parameters=parameters)
             mat.drivers.temperature = T
             mat.ddrivers.temperature = 0
             stresses = [mat.variables.stress[1,1]]
@@ -106,7 +106,7 @@ let
 
         println("Time-varying temperature tests (activates ΔT terms)")
         println("T = $(degreesC(timevar_temperature[1]))°C ... $(degreesC(timevar_temperature[end]))°C, linear profile.")
-        mat = Chaboche(parameters=parameters)
+        mat = ChabocheThermal(parameters=parameters)
         stresses = [mat.variables.stress[1,1]]
         strains = [mat.drivers.strain[1,1]]
         for (Ta, Tb) in zip(timevar_temperature, timevar_temperature[2:end])
