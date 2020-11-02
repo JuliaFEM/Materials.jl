@@ -254,10 +254,6 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     #
     elastic_strain = dcontract(C, stress)
     thermal_dstrain = (alpha + dalphadT * (temperature - theta0)) * dtemperature * I2(T)
-    # println("Δεth = $(thermal_dstrain)")
-    # println("εel = $(elastic_strain)")
-    # println("D = $(D)")
-    # println("dD/dT = $(dDdT)")
     stress += (dcontract(D, dstrain - thermal_dstrain)
                + dcontract(dDdT, elastic_strain) * dtemperature)
 
@@ -265,7 +261,6 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     seff_dev = dev(stress - X1 - X2 - X3)
     # von Mises yield function
     f = sqrt(1.5)*norm(seff_dev) - (R0 + R)  # using elastic trial problem state
-    # println("$(strain) $(dstrain) $(v.stress[1,1]) $(stress[1,1]) $(f)")
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
