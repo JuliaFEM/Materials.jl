@@ -132,6 +132,14 @@ end
 
 Given functions `E(theta)` and `nu(theta)`, return a function
 `elasticity_tensor(theta)`.
+
+We perform this manual currying, because this approach allows
+you to easily get its d/dθ via `ForwardDiff`:
+
+    E(θ) = ...
+    ν(θ) = ...
+    D = create_elasticity_tensor(E, ν)  # -> D = D(θ)
+    dDdθ(θ) = Symm4{T}(ForwardDiff.derivative(D, θ))
 """
 function create_elasticity_tensor(E::Function, nu::Function)
     function elasticity_tensor(theta::Real)
@@ -146,6 +154,14 @@ end
 
 Given functions `E(theta)` and `nu(theta)`, return a function
 `compliance_tensor(theta)`.
+
+We perform this manual currying, because this approach allows
+you to easily get its d/dθ via `ForwardDiff`:
+
+    E(θ) = ...
+    ν(θ) = ...
+    C = create_compliance_tensor(E, ν)  # -> C = C(θ)
+    dCdθ(θ) = Symm4{T}(ForwardDiff.derivative(C, θ))
 """
 function create_compliance_tensor(E::Function, nu::Function)
     function compliance_tensor(theta::Real)
@@ -153,6 +169,34 @@ function create_compliance_tensor(E::Function, nu::Function)
         return isotropic_compliance_tensor(lambda, mu)
     end
     return compliance_tensor
+end
+
+"""
+    create_thermal_strain_tensor(alpha, theta0)
+
+Given a function `alpha(theta)` and a reference temperature `theta0`
+(at which thermal expansion is considered zero), return a function
+`isotropic_thermal_strain_tensor(theta)`.
+
+Here `alpha` is the linear thermal expansion coefficient.
+
+This allows you to easily get its d/dθ via `ForwardDiff`:
+
+    α(θ) = ...
+    θ₀ = ...
+    εth = create_thermal_strain_tensor(α, θ₀)  # -> εth = εth(θ)
+    dεthdθ(θ) = Symm2{T}(ForwardDiff.derivative(εth, θ))
+
+Then, given θ and Δθ, you can easily get the increment Δεth:
+
+    Δεth(θ, Δθ) = dεthdθ(θ) * Δθ
+"""
+function create_thermal_strain_tensor(alpha::Function, theta0::Real)
+    """εth = α(θ) (θ - θ₀) I"""
+    function isotropic_thermal_strain_tensor(theta::Real)
+        return alpha(theta) * (theta - theta0) * Symm2(I(3))
+    end
+    return isotropic_thermal_strain_tensor
 end
 
 """
@@ -198,68 +242,78 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
 
-    Df = create_elasticity_tensor(Ef, nuf)
-    Cf = create_compliance_tensor(Ef, nuf)
-
-    D = Df(temperature)  # dσ/dε, i.e. ∂σij/∂εkl
-    C = Cf(temperature)
-    dDdT = Symm4{T}(ForwardDiff.derivative(Df, temperature))
-    alpha = alphaf(temperature)
-    dalphadT = ForwardDiff.derivative(alphaf, temperature)
-    R0 = R0f(temperature)
-
     # Compute the elastic trial stress.
     #
-    # We compute the stress increment by using data from the start of the
-    # timestep, so this is essentially a forward Euler predictor.
+    # We compute the elastic trial stress increment by using data from the
+    # start of the timestep, so we have essentially a forward Euler predictor.
     #
     # Relevant equations (thermoelasto(-visco-)plastic model):
     #
     #   ε = εel + εpl + εth
-    #   σ = D : εel   (Hooke's law)
+    #   σ = D : εel           (Hooke's law)
     #
-    # where D = D(θ) is the elastic stiffness tensor, and θ is the absolute
-    # temperature.
+    # where D = D(θ) is the elastic stiffness tensor (symmetric, rank-4),
+    # and θ is the absolute temperature (scalar, θ > 0).
     #
-    # The total strain ε is a driver, and the plastic strain εpl is stored in
-    # the model, but the elastic and thermal strains are not.
+    # Thus:
     #
-    # Since we store the total stress σ, we can obtain the elastic strain
-    # (at the start of the timestep) by inverting the stress-strain equation.
+    #   Δσ = Δ(D : εel)
+    #      = ΔD : εel + D : Δεel
+    #      = (dD/dθ Δθ) : εel + D : Δεel
+    #      = dD/dθ : εel Δθ + D : Δεel
+    #
+    # where the elastic strain increment
+    #
+    #   Δεel = Δε - Δεpl - Δεth
+    #
+    # In the elastic trial step, we temporarily assume Δεpl = 0, so then:
+    #
+    #   Δεel = Δε - Δεth
+    #
+    # The elastic stiffness tensor D is explicitly known. Its derivative dD/dθ
+    # we can obtain by autodiff. The temperature increment Δθ is a driver.
+    #
+    # What remains to consider are the various strains. Because we store the total
+    # stress σ, we can obtain the elastic strain εel by inverting Hooke's law:
     #
     #   εel = C : σ
     #
-    # where C = C(θ) is the elastic compliance tensor (i.e. the inverse
-    # of the stiffness tensor with respect to the double contraction).
+    # where C = C(θ) is the elastic compliance tensor (i.e. the inverse of
+    # the elastic stiffness tensor D with respect to the double contraction),
+    # and σ is a known total stress. (We have it at the start of the timestep.)
     #
-    # The strain and stress increments are
+    # The total strain increment Δε is a driver. So we only need to obtain Δεth.
+    # The thermal strain εth is, generally speaking,
     #
-    #   Δε = Δεel + Δεpl + Δεth
+    #   εth = α(θ) (θ - θ₀)
     #
-    #   Δσ = Δ(D : εel)
-    #      = D : Δεel + ΔD : εel
-    #      = D : Δεel + (dD/dθ Δθ) : εel
-    #      = D : Δεel + dD/dθ : εel Δθ
+    # where α is the linear thermal expansion tensor (symmetric, rank-2), and
+    # θ₀ is a reference temperature, where thermal expansion is considered zero.
     #
-    # In the elastic trial step, we set Δεpl = 0, so then Δεel = Δε - Δεth.
-    # For a model with isotropic thermal expansion, the thermal strain
-    # increment is:
+    # We can autodiff this to obtain dεth/dθ. Then the thermal strain increment
+    # Δεth is just:
     #
-    #   Δεth = Δ(α (θ - θ₀) I)
-    #        = (α Δθ + dα/dθ Δθ (θ - θ₀)) I
-    #        = (α + dα/dθ (θ - θ₀)) Δθ I
+    #   Δεth = dεth/dθ Δθ
     #
-    # In general, for an anisotropic thermal response, α I is replaced by
-    # the tensor of thermal expansion.
-    #
+    Cf = create_compliance_tensor(Ef, nuf)
+    C = Cf(temperature)
     elastic_strain = dcontract(C, stress)
-    thermal_dstrain = (alpha + dalphadT * (temperature - theta0)) * dtemperature * Symm2(I(3))
-    stress += (dcontract(D, dstrain - thermal_dstrain)
+
+    thermal_strainf = create_thermal_strain_tensor(alphaf, theta0)
+    thermal_dstrain = Symm2{T}(ForwardDiff.derivative(thermal_strainf, temperature)) * dtemperature
+
+    Df = create_elasticity_tensor(Ef, nuf)
+    D = Df(temperature)  # dσ/dε, i.e. ∂σij/∂εkl
+    dDdT = Symm4{T}(ForwardDiff.derivative(Df, temperature))
+    trial_elastic_dstrain = dstrain - thermal_dstrain
+
+    stress += (dcontract(D, trial_elastic_dstrain)
                + dcontract(dDdT, elastic_strain) * dtemperature)
 
     # deviatoric part of stress, accounting for plastic backstresses Xm.
     seff_dev = dev(stress - X1 - X2 - X3)
     # von Mises yield function
+    R0 = R0f(temperature)
     f = sqrt(1.5)*norm(seff_dev) - (R0 + R)  # using elastic trial problem state
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
@@ -275,15 +329,17 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         seff_dev = dev(stress - X1 - X2 - X3)
         f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
 
+        # Compute |∂εpl/∂t|
         Kn = Knf(temperature_new)
         nn = nnf(temperature_new)
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn  # power law viscoplasticity (Norton-Bailey type)
-        dp = dotp*dtime  # |dεpl|, using backward Euler (dotp is ∂εpl/∂t at the end of the timestep)
+        dp = dotp*dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
+
         # n = ∂f/∂σ
         n = sqrt(1.5)*seff_dev/norm(seff_dev)  # for a von Mises model. Note 2/3 * (n : n) = 1.
 
         plastic_strain += dp*n
-        cumeq += dp   # cumulative equivalent plastic strain (note dp ≥ 0)
+        cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
         # Compute the new Jacobian, accounting for the plastic contribution. Because
         #   x ≡ [σ R X1 X2 X3]   (vector of length 25, with tensors encoded in Voigt format)
@@ -294,6 +350,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         # where r = r(x) is the residual, given by the function g!. AD can get us dr/dx automatically,
         # the other factor we will have to supply manually.
         drdx = ForwardDiff.jacobian(debang(g!), x)  # Array{25, 25}
+        # TODO: update drde for this model to get quadratic convergence in Newton-Raphson (in FEM solvers).
         drde = zeros((length(x),6))                 # Array{25, 6}
         drde[1:6, 1:6] = tovoigt(D)  # elastic Jacobian. Follows from the defn. of g!.
         D = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
@@ -369,9 +426,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
 
-    Df = create_elasticity_tensor(Ef, nuf)
-    Cf = create_compliance_tensor(Ef, nuf)
-
     # To compute Δσ (and thus σ_new) in the residual, we need the new elastic
     # strain εel_new, as well as the elastic strain increment Δεel. By the
     # definition of Δεel,
@@ -381,26 +435,32 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # The elastic strain isn't stored in the model, but the total stress is,
     # so we can obtain εel_old from Hooke's law, using the old problem state.
     #
-    # The other quantity we need is Δεel. Recall that
+    # The other quantity we need is Δεel. Recall that, in general:
     #
-    #   Δε = Δεel + Δεpl + Δεth
+    #   Δεel = Δε - Δεpl - Δεth
     #
     # The total strain increment Δε is a driver. The (visco-)plastic model gives
-    # us Δεpl (iteratively). We can obtain Δεth as before.
+    # us Δεpl (iteratively). The thermal contribution Δεth we can obtain as before.
     #
     # Thus we obtain εel and Δεel, which we can use to compute the residual for
     # the new total stress σ_new.
     #
+    Cf = create_compliance_tensor(Ef, nuf)
     C = Cf(temperature)
     elastic_strain_old = dcontract(C, stress)
 
-    # For computing the residual, all other quantities are needed at the new
-    # problem state, so we use the new temperature.
+    # All other quantities are needed in the computation of the residual,
+    # at the new problem state, so we use the new temperature. It is a
+    # driver so we have its final value without iteration.
     temperature_new = temperature + dtemperature
+
+    thermal_strainf = create_thermal_strain_tensor(alphaf, theta0)
+    thermal_dstrain = Symm2{T}(ForwardDiff.derivative(thermal_strainf, temperature_new)) * dtemperature
+
+    Df = create_elasticity_tensor(Ef, nuf)
     D = Df(temperature_new)
     dDdT = Symm4{T}(ForwardDiff.derivative(Df, temperature_new))
-    alpha = alphaf(temperature_new)
-    dalphadT = ForwardDiff.derivative(alphaf, temperature_new)
+
     R0 = R0f(temperature_new)
     Kn = Knf(temperature_new)
     nn = nnf(temperature_new)
@@ -413,8 +473,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Q = Qf(temperature_new)
     b = bf(temperature_new)
 
-    thermal_dstrain = (alpha + dalphadT * (temperature_new - theta0)) * dtemperature * Symm2(I(3))
-
     # Compute the residual. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.
     function g!(F::V, x::V) where V <: AbstractVector{<:Real}
@@ -425,19 +483,18 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
 
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
+
         n = sqrt(1.5)*seff_dev/norm(seff_dev)
 
         # The equations are written in an incremental form.
         #
-        # Δσ = D : Δεel  +  dD/dθ : εel Δθ     (components 1:6)
-        # ΔR = b (Q - R_new) Δp                (component 7)
-        # ΔXj = ((2/3) Cj n - Dj Xj_new) Δp    (components 8:13, 14:19, 20:25)
+        # Δσ = D : Δεel + dD/dθ : εel Δθ      (components 1:6)
+        # ΔR = b (Q - R_new) Δp               (component 7)
+        # ΔXj = ((2/3) Cj n - Dj Xj_new) Δp   (components 8:13, 14:19, 20:25)
         #
         # where
         #
         # Δ(...) = (...)_new - (...)_old
-        #
-        # Note Δθ is one of the drivers, `dtemperature`.
         #
         # Then in each equation, move the terms on the RHS to the LHS
         # to get the standard form, (stuff) = 0.
