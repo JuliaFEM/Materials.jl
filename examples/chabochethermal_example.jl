@@ -37,7 +37,7 @@ let
     end
 
     let T0 = K(20.0),
-        T1 = K(600.0),
+        T1 = K(620.0),
         # Thermal elongation, Eurocode, SFS-EN 1993-1-2, carbon steel
         #   1.2e-5 * T[C°] + 0.4e-8 * T[C°]^2 - 2.416e-4
         # α is the derivative of this.
@@ -53,9 +53,12 @@ let
         #     https://www.engineeringtoolbox.com/linear-expansion-coefficients-d_95.html
         parameters = ChabocheThermalParameterState(theta0=T0,
                                                    E=capped_linear(T0, 200.0e3, T1, 100.0e3),
-                                                   nu=capped_linear(T0, 0.3, T1, 0.35),
-                                                   alpha=capped_linear(T0, 1.216e-5, T1, 1.680e-5),
+                                                   #nu=capped_linear(T0, 0.3, T1, 0.35),
+                                                   nu=constant(0.3),
+                                                   #alpha=capped_linear(T0, 1.216e-5, T1, 1.680e-5),
+                                                   alpha=constant(1.216e-5),
                                                    R0=capped_linear(T0, 100.0, T1, 50.0),
+                                                   # R0=constant(1000.0),
                                                    # viscous hardening in constant strain rate test: (tvp * ε')^(1/nn) * Kn
                                                    tvp=1000.0,
                                                    Kn=capped_linear(T0, 100.0, T1, 50.0),
@@ -70,17 +73,20 @@ let
                                                    D2=constant(0.0),
                                                    C3=constant(0.0),
                                                    D3=constant(0.0),
-                                                   Q=capped_linear(T0, 50.0, T1, 10.0),
-                                                   b=capped_linear(T0, 100.0, T1, 0.01)),
-                                                   # Q=constant(0.0),
-                                                   # b=constant(0.0)),
+                                                   # Q=capped_linear(T0, 50.0, T1, 10.0),
+                                                   # b=capped_linear(T0, 100.0, T1, 0.01)),
+                                                   Q=constant(0.0),
+                                                   b=constant(0.0)),
         # uniaxial pull test, so we set only dε11.
-        strain_rate=1e-4,  # dε/dt [1/s]
+        # stress_rate=10.0, # dσ/dt [MPa/s] (for stress-driven test)
+        strain_rate=1e-3,  # dε/dt [1/s] (for strain-driven test)
         strain_final=0.005,  # when to stop the pull test
-        dt=0.25,  # simulation timestep, [s]
-        dstrain11 = strain_rate * dt,  # dε11 during one timestep
+        dt=0.05,  # simulation timestep, [s]
+        # dstress11 = stress_rate * dt,  # dσ11 during one timestep (stress-driven)
+        dstrain11 = strain_rate * dt,  # dε11 during one timestep (strain-driven)
         n_timesteps = Integer(round(strain_final / dstrain11)),
-        constant_temperatures = range(T0, T1, length=3),
+        #constant_temperatures = range(T0, T1, length=3),
+        constant_temperatures = [K(20.0), K(150.0), K(300.0), K(620.0)],
         timevar_temperature = range(T0, T0 + 130, length=n_timesteps + 1)
 
         plot()  # make empty figure
@@ -95,6 +101,7 @@ let
             strains = [mat.drivers.strain[1,1]]
             for i in 1:n_timesteps
                 uniaxial_increment!(mat, dstrain11, dt)
+                # stress_driven_uniaxial_increment!(mat, dstress11, dt)
                 update_material!(mat)
                 push!(strains, mat.drivers.strain[1,1])
                 push!(stresses, mat.variables.stress[1,1])
@@ -110,10 +117,11 @@ let
         stresses = [mat.variables.stress[1,1]]
         strains = [mat.drivers.strain[1,1]]
         for (Ta, Tb) in zip(timevar_temperature, timevar_temperature[2:end])
-            # println("        Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C, ΔT = $(Tb - Ta)°C")
+            println("        Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C, ΔT = $(Tb - Ta)°C")
             mat.drivers.temperature = Tb
             mat.ddrivers.temperature = Tb - Ta
             uniaxial_increment!(mat, dstrain11, dt)
+            # stress_driven_uniaxial_increment!(mat, dstress11, dt)
             update_material!(mat)
             push!(strains, mat.drivers.strain[1,1])
             push!(stresses, mat.variables.stress[1,1])
