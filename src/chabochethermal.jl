@@ -192,9 +192,10 @@ Then, given θ and Δθ, you can easily get the increment Δεth:
     Δεth(θ, Δθ) = dεthdθ(θ) * Δθ
 """
 function create_thermal_strain_tensor(alpha::Function, theta0::Real)
+    I2 = Symm2(I(3))
     """εth = α(θ) (θ - θ₀) I"""
     function isotropic_thermal_strain_tensor(theta::Real)
-        return alpha(theta) * (theta - theta0) * Symm2(I(3))
+        return alpha(theta) * (theta - theta0) * I2
     end
     return isotropic_thermal_strain_tensor
 end
