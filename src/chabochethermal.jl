@@ -6,7 +6,7 @@ module ChabocheThermalModule
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 
 import ..AbstractMaterial, ..AbstractMaterialState
-import ..Utilities: Symm2, Symm4, I2, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame, debang
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame, debang
 import ..integrate_material!  # for method extension
 
 # parametrically polymorphic for any type representing ℝ
@@ -253,7 +253,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     # the tensor of thermal expansion.
     #
     elastic_strain = dcontract(C, stress)
-    thermal_dstrain = (alpha + dalphadT * (temperature - theta0)) * dtemperature * I2(T)
+    thermal_dstrain = (alpha + dalphadT * (temperature - theta0)) * dtemperature * Symm2(I(3))
     stress += (dcontract(D, dstrain - thermal_dstrain)
                + dcontract(dDdT, elastic_strain) * dtemperature)
 
@@ -413,7 +413,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Q = Qf(temperature_new)
     b = bf(temperature_new)
 
-    thermal_dstrain = (alpha + dalphadT * (temperature_new - theta0)) * dtemperature * I2(T)
+    thermal_dstrain = (alpha + dalphadT * (temperature_new - theta0)) * dtemperature * Symm2(I(3))
 
     # Compute the residual. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.

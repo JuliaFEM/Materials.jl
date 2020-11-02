@@ -6,7 +6,7 @@ module Utilities
 using Tensors, ForwardDiff
 
 export Symm2, Symm4
-export delta, I2, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor, isotropic_compliance_tensor
+export delta, II, IT, IS, IA, IV, ID, isotropic_elasticity_tensor, isotropic_compliance_tensor
 export lame, delame, debang, find_root
 
 """Symm2{T} is an alias for SymmetricTensor{2,3,T}."""
@@ -27,13 +27,6 @@ delta(i::T, j::T) where T <: Integer = (i == j) ? one(T) : zero(T)
 # and those behave correctly in calculations with types involving other reals
 # such as Float64.
 # Performance implications? Is the Julia compiler smart enough to optimize?
-"""
-    I2(T::Type=Float64)
-
-Rank-2 unit tensor, defined by I2 = delta(i, j).
-"""
-I2(T::Type=Float64) = Symm2{T}((i,j) -> delta(i,j))
-
 """
     II(T::Type=Float64)
 
