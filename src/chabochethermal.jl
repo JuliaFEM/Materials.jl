@@ -15,6 +15,9 @@ export GenericChabocheThermal, GenericChabocheThermalDriverState, GenericChaboch
 # specialization for Float64
 export ChabocheThermal, ChabocheThermalDriverState, ChabocheThermalParameterState, ChabocheThermalVariableState
 
+"""Rank-2 identity tensor in three spatial dimensions."""
+I2 = Symm2(I(3))
+
 @with_kw mutable struct GenericChabocheThermalDriverState{T <: Real} <: AbstractMaterialState
     time::T = zero(T)
     strain::Symm2{T} = zero(Symm2{T})
@@ -128,76 +131,58 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
 end
 
 """
-    create_elasticity_tensor(E, nu)
+    elasticity_tensor(E::Function, nu::Function, theta::Real)
 
-Given functions `E(theta)` and `nu(theta)`, return a function
-`elasticity_tensor(theta)`.
-
-We perform this manual currying, because this approach allows
-you to easily get its d/dθ via `ForwardDiff`:
+Usage example:
 
     E(θ) = ...
     ν(θ) = ...
-    D = create_elasticity_tensor(E, ν)  # -> D = D(θ)
+    D(θ) = elasticity_tensor(E, ν, θ)
     dDdθ(θ) = Symm4{T}(ForwardDiff.derivative(D, θ))
 """
-function create_elasticity_tensor(E::Function, nu::Function)
-    function elasticity_tensor(theta::Real)
-        lambda, mu = lame(E(theta), nu(theta))
-        return isotropic_elasticity_tensor(lambda, mu)
-    end
-    return elasticity_tensor
+function elasticity_tensor(E::Function, nu::Function, theta::Real)
+    lambda, mu = lame(E(theta), nu(theta))
+    return isotropic_elasticity_tensor(lambda, mu)
 end
 
 """
-    create_compliance_tensor(E, nu)
+    compliance_tensor(E::Function, nu::Function, theta::Real)
 
-Given functions `E(theta)` and `nu(theta)`, return a function
-`compliance_tensor(theta)`.
-
-We perform this manual currying, because this approach allows
-you to easily get its d/dθ via `ForwardDiff`:
+Usage example:
 
     E(θ) = ...
     ν(θ) = ...
-    C = create_compliance_tensor(E, ν)  # -> C = C(θ)
+    C(θ) = compliance_tensor(E, ν, θ)
     dCdθ(θ) = Symm4{T}(ForwardDiff.derivative(C, θ))
 """
-function create_compliance_tensor(E::Function, nu::Function)
-    function compliance_tensor(theta::Real)
-        lambda, mu = lame(E(theta), nu(theta))
-        return isotropic_compliance_tensor(lambda, mu)
-    end
-    return compliance_tensor
+function compliance_tensor(E::Function, nu::Function, theta::Real)
+    lambda, mu = lame(E(theta), nu(theta))
+    return isotropic_compliance_tensor(lambda, mu)
 end
 
 """
-    create_thermal_strain_tensor(alpha, theta0)
+    thermal_strain_tensor(alpha::Function, theta0::Real, theta::Real)
 
-Given a function `alpha(theta)` and a reference temperature `theta0`
-(at which thermal expansion is considered zero), return a function
-`isotropic_thermal_strain_tensor(theta)`.
+Return the isotropic thermal strain tensor:
 
-Here `alpha` is the linear thermal expansion coefficient.
+    εth = α(θ) (θ - θ₀) I
 
-This allows you to easily get its d/dθ via `ForwardDiff`:
+Here `alpha` is the linear thermal expansion coefficient, and `theta0`
+is a reference temperature, at which thermal expansion is considered zero.
+
+Usage example:
 
     α(θ) = ...
     θ₀ = ...
-    εth = create_thermal_strain_tensor(α, θ₀)  # -> εth = εth(θ)
+    εth(θ) = thermal_strain_tensor(α, θ₀, θ)
     dεthdθ(θ) = Symm2{T}(ForwardDiff.derivative(εth, θ))
 
-Then, given θ and Δθ, you can easily get the increment Δεth:
+Given θ and Δθ, you can easily get the increment Δεth:
 
     Δεth(θ, Δθ) = dεthdθ(θ) * Δθ
 """
-function create_thermal_strain_tensor(alpha::Function, theta0::Real)
-    I2 = Symm2(I(3))
-    """εth = α(θ) (θ - θ₀) I"""
-    function isotropic_thermal_strain_tensor(theta::Real)
-        return alpha(theta) * (theta - theta0) * I2
-    end
-    return isotropic_thermal_strain_tensor
+function thermal_strain_tensor(alpha::Function, theta0::Real, theta::Real)
+    return alpha(theta) * (theta - theta0) * I2
 end
 
 """
@@ -296,20 +281,22 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     #
     #   Δεth = dεth/dθ Δθ
     #
-    Cf = create_compliance_tensor(Ef, nuf)
+    Cf(theta) = compliance_tensor(Ef, nuf, theta)
     C = Cf(temperature)
     elastic_strain = dcontract(C, stress)
 
-    thermal_strainf = create_thermal_strain_tensor(alphaf, theta0)
-    thermal_dstrain = Symm2{T}(ForwardDiff.derivative(thermal_strainf, temperature)) * dtemperature
+    thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
+    thermal_strain_derivative(theta) = Symm2{T}(ForwardDiff.derivative(thermal_strainf, theta))
+    thermal_dstrain = thermal_strain_derivative(temperature) * dtemperature
 
-    Df = create_elasticity_tensor(Ef, nuf)
-    D = Df(temperature)  # dσ/dε, i.e. ∂σij/∂εkl
-    dDdT = Symm4{T}(ForwardDiff.derivative(Df, temperature))
+    Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
+    dDdthetaf(theta) = Symm4{T}(ForwardDiff.derivative(Df, theta))
+    D = Df(temperature)
+    dDdtheta = dDdthetaf(temperature)
     trial_elastic_dstrain = dstrain - thermal_dstrain
 
     stress += (dcontract(D, trial_elastic_dstrain)
-               + dcontract(dDdT, elastic_strain) * dtemperature)
+               + dcontract(dDdtheta, elastic_strain) * dtemperature)
 
     # deviatoric part of stress, accounting for plastic backstresses Xm.
     seff_dev = dev(stress - X1 - X2 - X3)
@@ -446,7 +433,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Thus we obtain εel and Δεel, which we can use to compute the residual for
     # the new total stress σ_new.
     #
-    Cf = create_compliance_tensor(Ef, nuf)
+    Cf(theta) = compliance_tensor(Ef, nuf, theta)
     C = Cf(temperature)
     elastic_strain_old = dcontract(C, stress)
 
@@ -455,12 +442,14 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # driver so we have its final value without iteration.
     temperature_new = temperature + dtemperature
 
-    thermal_strainf = create_thermal_strain_tensor(alphaf, theta0)
-    thermal_dstrain = Symm2{T}(ForwardDiff.derivative(thermal_strainf, temperature_new)) * dtemperature
+    thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
+    thermal_strain_derivative(theta) = Symm2{T}(ForwardDiff.derivative(thermal_strainf, theta))
+    thermal_dstrain = thermal_strain_derivative(temperature_new) * dtemperature
 
-    Df = create_elasticity_tensor(Ef, nuf)
+    Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
+    dDdthetaf(theta) = Symm4{T}(ForwardDiff.derivative(Df, theta))
     D = Df(temperature_new)
-    dDdT = Symm4{T}(ForwardDiff.derivative(Df, temperature_new))
+    dDdtheta = dDdthetaf(temperature_new)
 
     R0 = R0f(temperature_new)
     Kn = Knf(temperature_new)
@@ -506,7 +495,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         tovoigt!(view(F, 1:6),
                  stress_new - stress
                  - dcontract(D, elastic_dstrain)
-                 - dcontract(dDdT, elastic_strain) * dtemperature)
+                 - dcontract(dDdtheta, elastic_strain) * dtemperature)
 
         F[7] = R_new - R - b*(Q - R_new)*dp
 
