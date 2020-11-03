@@ -237,7 +237,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     Knf = p.Kn
     nnf = p.nn
 
-    @unpack strain, time, temperature = d
+    temperature = d.temperature
     dstrain = dd.strain
     dtime = dd.time
     dtemperature = dd.temperature
@@ -421,7 +421,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Note this does not include the elastic trial; this is the actual state
     # at the end of the previous timestep.
 
-    @unpack strain, time, temperature = d
+    temperature = d.temperature
     dstrain = dd.strain
     dtime = dd.time
     dtemperature = dd.temperature
