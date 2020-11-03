@@ -324,7 +324,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         dp = dotp*dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
 
         # n = ∂f/∂σ
-        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # for a von Mises model. Note 2/3 * (n : n) = 1.
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # based on von Mises f. Note 2/3 * (n : n) = 1.
 
         plastic_strain += dp*n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
@@ -463,6 +463,33 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Q = Qf(temperature_new)
     b = bf(temperature_new)
 
+    # The evolution equations are written in an incremental form:
+    #
+    #   Δσ = D : Δεel + dD/dθ : εel Δθ      (components 1:6)
+    #   ΔR = b (Q - R_new) Δp               (component 7)
+    #   ΔXj = ((2/3) Cj n - Dj Xj_new) Δp   (components 8:13, 14:19, 20:25) (no sum)
+    #
+    # where
+    #
+    #   Δ(...) = (...)_new - (...)_old
+    #
+    # (Δp and n are described below.)
+    #
+    # Then in each equation, move the terms on the RHS to the LHS to get
+    # the standard form, (stuff) = 0. Then the LHS is the residual.
+    #
+    # The viscoplastic response is updated by:
+    #
+    #   Δεpl = Δp n
+    #
+    # where
+    #
+    #   Δp = p' Δt
+    #   p' = 1/tvp * (<f> / Kn)^nn  (Norton-Bailey power law; <...>: Macaulay brackets)
+    #   f = √(3/2 dev(σ_eff) : dev(σ_eff)) - (R0 + R)
+    #   σ_eff = σ - ∑ Xj
+    #   n = ∂f/∂σ
+    #
     # Compute the residual. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.
     function g!(F::V, x::V) where V <: AbstractVector{<:Real}
@@ -474,21 +501,8 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
 
-        n = sqrt(1.5)*seff_dev/norm(seff_dev)
+        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # ∂f/∂σ based on von Mises f
 
-        # The equations are written in an incremental form.
-        #
-        # Δσ = D : Δεel + dD/dθ : εel Δθ      (components 1:6)
-        # ΔR = b (Q - R_new) Δp               (component 7)
-        # ΔXj = ((2/3) Cj n - Dj Xj_new) Δp   (components 8:13, 14:19, 20:25)
-        #
-        # where
-        #
-        # Δ(...) = (...)_new - (...)_old
-        #
-        # Then in each equation, move the terms on the RHS to the LHS
-        # to get the standard form, (stuff) = 0.
-        #
         plastic_dstrain = dp*n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
         elastic_strain = elastic_strain_old + elastic_dstrain
