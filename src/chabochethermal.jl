@@ -186,8 +186,17 @@ function thermal_strain_tensor(alpha::Function, theta0::Real, theta::Real)
 end
 
 # TODO: think about the general API
+# We have `VariableState` and `ParameterState` as the parameters
+# specifically so that this generalizes to other models.
+# Maybe we should also have `DriverState` instead of `theta`?
+#
+# We should be careful to accept also `ForwardDiff.Dual`, because this stuff
+# gets differentiated when computing the jacobian of the residual.
+# For `yield_jacobian`, this leads to nested uses of `ForwardDiff`.
 """
-    function yield_criterion(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
+    yield_criterion(state::GenericChabocheThermalVariableState{<:Real},
+                    theta::T where T <: Real,
+                    parameters::GenericChabocheThermalParameterState{<:Real})
 
 Temperature-dependent yield criterion. This particular one is the von Mises
 criterion for a Chaboche model with thermal effects, three backstresses,
@@ -202,36 +211,42 @@ may be needed by the yield criterion. (This one needs `R0`.)
 
 The return value is a scalar, the value of the yield function `f`.
 """
-function yield_criterion(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
-    # We can't read everything from `material`, because we must be able to vary
-    # both the problem state and the temperature. It's more convenient if those
-    # don't have to be placed into a `GenericChabocheThermalVariableState`.
-    sigma, R, X1, X2, X3 = state_from_vector(x)
-    R0 = material.parameters.R0(theta)
+function yield_criterion(state::GenericChabocheThermalVariableState{<:Real},
+                         theta::T where T <: Real,
+                         parameters::GenericChabocheThermalParameterState{<:Real})
+    @unpack stress, R, X1, X2, X3 = state
+    @unpack R0 = parameters
     # deviatoric part of stress, accounting for plastic backstresses Xm.
-    seff_dev = dev(sigma - X1 - X2 - X3)
-    f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
+    seff_dev = dev(stress - X1 - X2 - X3)
+    f = sqrt(1.5)*norm(seff_dev) - (R0(theta) + R)
     return f
 end
 
-function dyielddx(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
-    f(x) = [yield_criterion(x, theta, material)]  # note array wrapper on output.
-    return ForwardDiff.jacobian(f, x)
-end
+"""The jacobian of the yield criterion with respect to `state`.
 
-function dyielddsigma(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
-    # For von Mises, we could just:
-    #
-    # sigma, R, X1, X2, X3 = state_from_vector(x)
-    # seff_dev = dev(sigma - X1 - X2 - X3)
-    # return sqrt(1.5)*seff_dev/norm(seff_dev)  # von Mises. Note 2/3 * (n : n) = 1.
-    #
-    # This works with any yield criterion:
-    dfdx = dyielddx(x, theta, material)
-    # Note just `Symm2`, not `Symm2{T}`, because we need to accept `ForwardDiff.Dual`.
-    # `n` itself gets differentiated when computing the jacobian of the residual,
-    # leading to nested `ForwardDiff` evaluations.
-     return fromvoigt(Symm2, @view dfdx[1:6])
+The return value is a tuple as in `state_from_vector`, but each term
+represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
+
+Note ∂f/∂σ = n, the normal of the yield surface.
+"""
+function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
+                        theta::T where T <: Real,
+                        parameters::GenericChabocheThermalParameterState{<:Real})
+    function f(x::AbstractVector{<:Real})
+        sigma, R, X1, X2, X3 = state_from_vector(x)
+        state = GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
+                                                               X1=X1,
+                                                               X2=X2,
+                                                               X3=X3,
+                                                               R=R)
+        return [yield_criterion(state, theta, parameters)]::Vector
+    end
+    @unpack stress, R, X1, X2, X3 = state
+    J = ForwardDiff.jacobian(f, state_to_vector(stress, R, X1, X2, X3))
+    # Since the yield function is scalar-valued, we can pun on `state_from_vector`
+    # to interpret the components of the jacobian for us.
+    # The result is a row vector, so drop the singleton dimension.
+    return state_from_vector(J[1,:])
 end
 
 """
@@ -278,8 +293,19 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
 
-    ff(x, theta) = yield_criterion(x, theta, material)
-    nf(x, theta) = dyielddsigma(x, theta, material)  # n = ∂f/∂σ
+    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{T}(stress=sigma,
+                                                                                     X1=X1,
+                                                                                     X2=X2,
+                                                                                     X3=X3,
+                                                                                     R=R),
+                                              theta, p)
+    # n = ∂f/∂σ
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{T}(stress=sigma,
+                                                                                    X1=X1,
+                                                                                    X2=X2,
+                                                                                    X3=X3,
+                                                                                    R=R),
+                                             theta, p)[1]
 
     # Compute the elastic trial stress.
     #
@@ -352,10 +378,10 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                + dcontract(dDdtheta, elastic_strain) * dtemperature)
 
     # using elastic trial problem state
-    x0 = state_to_vector(stress, R, X1, X2, X3)
-    f = ff(x0, temperature)
+    f = ff(stress, R, X1, X2, X3, temperature)
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
+        x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(g!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
@@ -363,8 +389,8 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
         # using the new problem state
         temperature_new = temperature + dtemperature
-        f = ff(x, temperature_new)
-        n = nf(x, temperature_new)
+        f = ff(stress, R, X1, X2, X3, temperature_new)
+        n = nf(stress, R, X1, X2, X3, temperature_new)
 
         # Compute |∂εpl/∂t|
         Kn = Knf(temperature_new)
@@ -448,8 +474,19 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Qf = p.Q
     bf = p.b
 
-    ff(x, theta) = yield_criterion(x, theta, material)
-    nf(x, theta) = dyielddsigma(x, theta, material)  # n = ∂f/∂σ
+    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
+                                                                                             X1=X1,
+                                                                                             X2=X2,
+                                                                                             X3=X3,
+                                                                                             R=R),
+                                              theta, p)
+    # n = ∂f/∂σ
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
+                                                                                            X1=X1,
+                                                                                            X2=X2,
+                                                                                            X3=X3,
+                                                                                            R=R),
+                                             theta, p)[1]
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
@@ -544,8 +581,8 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     function g!(F::V, x::V) where V <: AbstractVector{<:Real}
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)  # tentative new values from nlsolve
 
-        f = ff(x, temperature_new)
-        n = nf(x, temperature_new)
+        f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
+        n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
 
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
