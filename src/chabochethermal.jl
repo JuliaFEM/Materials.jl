@@ -138,7 +138,7 @@ Usage example:
     E(θ) = ...
     ν(θ) = ...
     D(θ) = elasticity_tensor(E, ν, θ)
-    dDdθ(θ) = Symm4{T}(ForwardDiff.derivative(D, θ))
+    dDdθ(θ) = Symm4(ForwardDiff.derivative(D, θ))
 """
 function elasticity_tensor(E::Function, nu::Function, theta::Real)
     lambda, mu = lame(E(theta), nu(theta))
@@ -153,7 +153,7 @@ Usage example:
     E(θ) = ...
     ν(θ) = ...
     C(θ) = compliance_tensor(E, ν, θ)
-    dCdθ(θ) = Symm4{T}(ForwardDiff.derivative(C, θ))
+    dCdθ(θ) = Symm4(ForwardDiff.derivative(C, θ))
 """
 function compliance_tensor(E::Function, nu::Function, theta::Real)
     lambda, mu = lame(E(theta), nu(theta))
@@ -175,7 +175,7 @@ Usage example:
     α(θ) = ...
     θ₀ = ...
     εth(θ) = thermal_strain_tensor(α, θ₀, θ)
-    dεthdθ(θ) = Symm2{T}(ForwardDiff.derivative(εth, θ))
+    dεthdθ(θ) = Symm2(ForwardDiff.derivative(εth, θ))
 
 Given θ and Δθ, you can easily get the increment Δεth:
 
