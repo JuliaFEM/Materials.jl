@@ -256,6 +256,8 @@ end
 ChabocheThermal material with thermal effects and three backstresses.
 Both kinematic and isotropic hardening.
 
+Viscoplastic response obeys a Norton-Bailey power law.
+
 See:
 
     J.-L. Chaboche. Constitutive equations for cyclic plasticity and cyclic
@@ -406,12 +408,13 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         #   x ≡ [σ R X1 X2 X3]   (vector of length 25, with tensors encoded in Voigt format)
         # we have
         #   dσ/dε = (dx/dε)[1:6,1:6]
-        # for which we can compute the LHS as follows:
+        # for which we can compute the RHS as follows:
         #   dx/dε = dx/dr dr/dε = inv(dr/dx) dr/dε ≡ (dr/dx) \ (dr/dε)
         # where r = r(x) is the residual, given by the function g!. AD can get us dr/dx automatically,
         # the other factor we will have to supply manually.
         drdx = ForwardDiff.jacobian(debang(g!), x)  # Array{25, 25}
-        # TODO: update drde for this model to get quadratic convergence in Newton-Raphson (in FEM solvers).
+        # TODO: Update drde for this model to get quadratic convergence in Newton-Raphson (in FEM solvers).
+        # TODO: Could arrange things a bit differently and use autodiff for that, too.
         drde = zeros((length(x),6))                 # Array{25, 6}
         drde[1:6, 1:6] = tovoigt(D)  # elastic Jacobian. Follows from the defn. of g!.
         D = fromvoigt(Symm4, (drdx\drde)[1:6, 1:6])
