@@ -185,24 +185,74 @@ function thermal_strain_tensor(alpha::Function, theta0::Real, theta::Real)
     return alpha(theta) * (theta - theta0) * I2
 end
 
+# TODO: think about the general API
+"""
+    function yield_criterion(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
+
+Temperature-dependent yield criterion. This particular one is the von Mises
+criterion for a Chaboche model with thermal effects, three backstresses,
+and isotropic hardening.
+
+`x` is a problem state, encoded into a vector. See `state_to_vector`.
+
+`theta` is the temperature to evaluate at.
+
+`material` is used for extracting any material parameters that
+may be needed by the yield criterion. (This one needs `R0`.)
+
+The return value is a scalar, the value of the yield function `f`.
+"""
+function yield_criterion(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
+    # We can't read everything from `material`, because we must be able to vary
+    # both the problem state and the temperature. It's more convenient if those
+    # don't have to be placed into a `GenericChabocheThermalVariableState`.
+    sigma, R, X1, X2, X3 = state_from_vector(x)
+    R0 = material.parameters.R0(theta)
+    # deviatoric part of stress, accounting for plastic backstresses Xm.
+    seff_dev = dev(sigma - X1 - X2 - X3)
+    f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
+    return f
+end
+
+function dyielddx(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
+    f(x) = [yield_criterion(x, theta, material)]  # note array wrapper on output.
+    return ForwardDiff.jacobian(f, x)
+end
+
+function dyielddsigma(x::AbstractVector{<:Real}, theta::T, material::GenericChabocheThermal{T}) where T <: Real
+    # For von Mises, we could just:
+    #
+    # sigma, R, X1, X2, X3 = state_from_vector(x)
+    # seff_dev = dev(sigma - X1 - X2 - X3)
+    # return sqrt(1.5)*seff_dev/norm(seff_dev)  # von Mises. Note 2/3 * (n : n) = 1.
+    #
+    # This works with any yield criterion:
+    dfdx = dyielddx(x, theta, material)
+    # Note just `Symm2`, not `Symm2{T}`, because we need to accept `ForwardDiff.Dual`.
+    # `n` itself gets differentiated when computing the jacobian of the residual,
+    # leading to nested `ForwardDiff` evaluations.
+     return fromvoigt(Symm2, @view dfdx[1:6])
+end
+
 """
     integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
 
-ChabocheThermal material with two backstresses. Both kinematic and isotropic hardening.
+ChabocheThermal material with thermal effects and three backstresses.
+Both kinematic and isotropic hardening.
 
 See:
 
-    J.-L. ChabocheThermal. Constitutive equations for cyclic plasticity and cyclic
+    J.-L. Chaboche. Constitutive equations for cyclic plasticity and cyclic
     viscoplasticity. International Journal of Plasticity 5(3) (1989), 247--302.
     https://doi.org/10.1016/0749-6419(89)90015-6
 
 Further reading:
 
-    J.-L. ChabocheThermal. A review of some plasticity and viscoplasticity constitutive
+    J.-L. Chaboche. A review of some plasticity and viscoplasticity constitutive
     theories. International Journal of Plasticity 24 (2008), 1642--1693.
     https://dx.doi.org/10.1016/j.ijplas.2008.03.009
 
-    J.-L. ChabocheThermal, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
+    J.-L. Chaboche, A. Gaubert, P. Kanouté, A. Longuet, F. Azzouz, M. Mazière.
     Viscoplastic constitutive equations of combustion chamber materials including
     cyclic hardening and dynamic strain aging. International Journal of Plasticity
     46 (2013), 1--22. https://dx.doi.org/10.1016/j.ijplas.2012.09.011
@@ -227,6 +277,9 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dtime = dd.time
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
+
+    ff(x, theta) = yield_criterion(x, theta, material)
+    nf(x, theta) = dyielddsigma(x, theta, material)  # n = ∂f/∂σ
 
     # Compute the elastic trial stress.
     #
@@ -298,14 +351,11 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     stress += (dcontract(D, trial_elastic_dstrain)
                + dcontract(dDdtheta, elastic_strain) * dtemperature)
 
-    # deviatoric part of stress, accounting for plastic backstresses Xm.
-    seff_dev = dev(stress - X1 - X2 - X3)
-    # von Mises yield function
-    R0 = R0f(temperature)
-    f = sqrt(1.5)*norm(seff_dev) - (R0 + R)  # using elastic trial problem state
+    # using elastic trial problem state
+    x0 = state_to_vector(stress, R, X1, X2, X3)
+    f = ff(x0, temperature)
     if f > 0.0
         g! = create_nonlinear_system_of_equations(material)
-        x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(g!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
@@ -313,18 +363,14 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
         # using the new problem state
         temperature_new = temperature + dtemperature
-        R0 = R0f(temperature_new)
-        seff_dev = dev(stress - X1 - X2 - X3)
-        f = sqrt(1.5)*norm(seff_dev) - (R0 + R)
+        f = ff(x, temperature_new)
+        n = nf(x, temperature_new)
 
         # Compute |∂εpl/∂t|
         Kn = Knf(temperature_new)
         nn = nnf(temperature_new)
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn  # power law viscoplasticity (Norton-Bailey type)
         dp = dotp*dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
-
-        # n = ∂f/∂σ
-        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # based on von Mises f. Note 2/3 * (n : n) = 1.
 
         plastic_strain += dp*n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
@@ -401,6 +447,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     D3f = p.D3
     Qf = p.Q
     bf = p.b
+
+    ff(x, theta) = yield_criterion(x, theta, material)
+    nf(x, theta) = dyielddsigma(x, theta, material)  # n = ∂f/∂σ
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
@@ -495,13 +544,11 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     function g!(F::V, x::V) where V <: AbstractVector{<:Real}
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)  # tentative new values from nlsolve
 
-        seff_dev = dev(stress_new - X1_new - X2_new - X3_new)
-        f = sqrt(1.5)*norm(seff_dev) - (R0 + R_new)
+        f = ff(x, temperature_new)
+        n = nf(x, temperature_new)
 
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
-
-        n = sqrt(1.5)*seff_dev/norm(seff_dev)  # ∂f/∂σ based on von Mises f
 
         plastic_dstrain = dp*n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
