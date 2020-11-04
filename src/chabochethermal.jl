@@ -249,6 +249,7 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     return state_from_vector(J[1,:])
 end
 
+
 """
     integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
 
