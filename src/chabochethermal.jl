@@ -185,44 +185,46 @@ function thermal_strain_tensor(alpha::Function, theta0::Real, theta::Real)
     return alpha(theta) * (theta - theta0) * I2
 end
 
-# TODO: think about the general API
-# We have `VariableState` and `ParameterState` as the parameters
-# specifically so that this generalizes to other models.
-# Maybe we should also have `DriverState` instead of `theta`?
+# TODO: Add this interface to the general API in `AbstractMaterial`?
 #
 # We should be careful to accept also `ForwardDiff.Dual`, because this stuff
 # gets differentiated when computing the jacobian of the residual.
-# For `yield_jacobian`, this leads to nested uses of `ForwardDiff`.
+# For `yield_jacobian`, that leads to nested uses of `ForwardDiff`.
 """
     yield_criterion(state::GenericChabocheThermalVariableState{<:Real},
-                    theta::T where T <: Real,
+                    drivers::GenericChabocheThermalDriverState{<:Real},
                     parameters::GenericChabocheThermalParameterState{<:Real})
 
 Temperature-dependent yield criterion. This particular one is the von Mises
 criterion for a Chaboche model with thermal effects, three backstresses,
 and isotropic hardening.
 
-`x` is a problem state, encoded into a vector. See `state_to_vector`.
+`state` should contain `stress`, `R`, `X1`, `X2`, `X3`.
+`drivers` should contain `temperature`.
+`parameters` should contain `R0`, a function of temperature.
 
-`theta` is the temperature to evaluate at.
-
-`material` is used for extracting any material parameters that
-may be needed by the yield criterion. (This one needs `R0`.)
+Other properties of the structures are not used by this function.
 
 The return value is a scalar, the value of the yield function `f`.
 """
 function yield_criterion(state::GenericChabocheThermalVariableState{<:Real},
-                         theta::T where T <: Real,
+                         drivers::GenericChabocheThermalDriverState{<:Real},
                          parameters::GenericChabocheThermalParameterState{<:Real})
     @unpack stress, R, X1, X2, X3 = state
+    @unpack temperature = drivers
     @unpack R0 = parameters
     # deviatoric part of stress, accounting for plastic backstresses Xm.
     seff_dev = dev(stress - X1 - X2 - X3)
-    f = sqrt(1.5)*norm(seff_dev) - (R0(theta) + R)
+    f = sqrt(1.5)*norm(seff_dev) - (R0(temperature) + R)
     return f
 end
 
-"""The jacobian of the yield criterion with respect to `state`.
+"""
+    yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
+                   drivers::GenericChabocheThermalDriverState{<:Real},
+                   parameters::GenericChabocheThermalParameterState{<:Real})
+
+The jacobian of the yield criterion with respect to `state`.
 
 The return value is a tuple as in `state_from_vector`, but each term
 represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
@@ -230,7 +232,7 @@ represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
 Note ∂f/∂σ = n, the normal of the yield surface.
 """
 function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
-                        theta::T where T <: Real,
+                        drivers::GenericChabocheThermalDriverState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
     function f(x::AbstractVector{<:Real})
         sigma, R, X1, X2, X3 = state_from_vector(x)
@@ -239,13 +241,13 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                                                                X2=X2,
                                                                X3=X3,
                                                                R=R)
-        return [yield_criterion(state, theta, parameters)]::Vector
+        return [yield_criterion(state, drivers, parameters)]::Vector
     end
     @unpack stress, R, X1, X2, X3 = state
     J = ForwardDiff.jacobian(f, state_to_vector(stress, R, X1, X2, X3))
     # Since the yield function is scalar-valued, we can pun on `state_from_vector`
     # to interpret the components of the jacobian for us.
-    # The result is a row vector, so drop the singleton dimension.
+    # The result of `jacobian` is a row vector, so drop the singleton dimension.
     return state_from_vector(J[1,:])
 end
 
@@ -301,14 +303,16 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                                                                                      X2=X2,
                                                                                      X3=X3,
                                                                                      R=R),
-                                              theta, p)
+                                              GenericChabocheThermalDriverState{T}(temperature=theta),
+                                              p)
     # n = ∂f/∂σ
     nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{T}(stress=sigma,
                                                                                     X1=X1,
                                                                                     X2=X2,
                                                                                     X3=X3,
                                                                                     R=R),
-                                             theta, p)[1]
+                                             GenericChabocheThermalDriverState{T}(temperature=theta),
+                                             p)[1]
 
     # Compute the elastic trial stress.
     #
@@ -483,14 +487,16 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                                                                                              X2=X2,
                                                                                              X3=X3,
                                                                                              R=R),
-                                              theta, p)
+                                              GenericChabocheThermalDriverState{typeof(theta)}(temperature=theta),
+                                              p)
     # n = ∂f/∂σ
     nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
                                                                                             X1=X1,
                                                                                             X2=X2,
                                                                                             X3=X3,
                                                                                             R=R),
-                                             theta, p)[1]
+                                             GenericChabocheThermalDriverState{typeof(theta)}(temperature=theta),
+                                             p)[1]
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
