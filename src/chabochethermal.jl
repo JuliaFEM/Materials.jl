@@ -224,31 +224,60 @@ end
                    drivers::GenericChabocheThermalDriverState{<:Real},
                    parameters::GenericChabocheThermalParameterState{<:Real})
 
-The jacobian of the yield criterion with respect to `state`.
+Compute `n = ∂f/∂σ`.
 
-The return value is a tuple as in `state_from_vector`, but each term
-represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
+`state` should contain `stress`, `R`, `X1`, `X2`, `X3`.
+`drivers` should contain `temperature`.
+`parameters` should contain `R0`, a function of temperature.
 
-Note ∂f/∂σ = n, the normal of the yield surface.
+Other properties of the structures are not used by this function.
+
+The return value is the symmetric rank-2 tensor `n`.
 """
 function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                         drivers::GenericChabocheThermalDriverState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
+    # We could compute the full jacobian like this:
+    #
+    # # The jacobian of the yield criterion with respect to `state`.
+    # #
+    # # The return value is a tuple as in `state_from_vector`, but each term
+    # # represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
+    # #
+    # # Note ∂f/∂σ = n, the normal of the yield surface.
+    #
+    # function f(x::AbstractVector{<:Real})
+    #     sigma, R, X1, X2, X3 = state_from_vector(x)
+    #     state = GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
+    #                                                            X1=X1,
+    #                                                            X2=X2,
+    #                                                            X3=X3,
+    #                                                            R=R)
+    #     return [yield_criterion(state, drivers, parameters)]::Vector
+    # end
+    # @unpack stress, R, X1, X2, X3 = state
+    # J = ForwardDiff.jacobian(f, state_to_vector(stress, R, X1, X2, X3))
+    # # Since the yield function is scalar-valued, we can pun on `state_from_vector`
+    # # to interpret the components of the jacobian for us.
+    # # The result of `jacobian` is a row vector, so drop the singleton dimension.
+    # return state_from_vector(J[1,:])
+    #
+    # But we only need ∂f/∂σ, so let's compute only that to make this run faster.
+    @unpack stress, R, X1, X2, X3 = state
+    marshal(tensor::Symm2) = tovoigt(tensor)
+    unmarshal(x::AbstractVector{T}) where T <: Real = fromvoigt(Symm2{T}, x)
     function f(x::AbstractVector{<:Real})
-        sigma, R, X1, X2, X3 = state_from_vector(x)
-        state = GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
-                                                               X1=X1,
-                                                               X2=X2,
-                                                               X3=X3,
-                                                               R=R)
+        eltype = typeof(x[1])
+        state = GenericChabocheThermalVariableState{eltype}(stress=unmarshal(x),
+                                                            X1=X1,
+                                                            X2=X2,
+                                                            X3=X3,
+                                                            R=R)
         return [yield_criterion(state, drivers, parameters)]::Vector
     end
-    @unpack stress, R, X1, X2, X3 = state
-    J = ForwardDiff.jacobian(f, state_to_vector(stress, R, X1, X2, X3))
-    # Since the yield function is scalar-valued, we can pun on `state_from_vector`
-    # to interpret the components of the jacobian for us.
-    # The result of `jacobian` is a row vector, so drop the singleton dimension.
-    return state_from_vector(J[1,:])
+    J = ForwardDiff.jacobian(f, marshal(stress))
+    # The result is a row vector, so drop the singleton dimension.
+    return unmarshal(J[1,:])
 end
 
 
@@ -312,7 +341,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                                                                                     X3=X3,
                                                                                     R=R),
                                              GenericChabocheThermalDriverState{T}(temperature=theta),
-                                             p)[1]
+                                             p)
 
     # Compute the elastic trial stress.
     #
@@ -496,7 +525,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                                                                                             X3=X3,
                                                                                             R=R),
                                              GenericChabocheThermalDriverState{typeof(theta)}(temperature=theta),
-                                             p)[1]
+                                             p)
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
