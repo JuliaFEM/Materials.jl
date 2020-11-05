@@ -284,10 +284,37 @@ end
 """
     integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
 
-ChabocheThermal material with thermal effects and three backstresses.
-Both kinematic and isotropic hardening.
+Chaboche viscoplastic material with thermal effects. The model includes
+kinematic hardening with three backstresses, and isotropic hardening.
 
-Viscoplastic response obeys a Norton-Bailey power law.
+Let the prime (') denote the time derivative. The evolution equations are:
+
+  σ' = D : εel' + dD/dθ : εel θ'
+  R' = b (Q - R) p'
+  Xj' = ((2/3) Cj n - Dj Xj) p'   (no sum)
+
+where j = 1, 2, 3. The strain consists of elastic, thermal and viscoplastic
+contributions:
+
+  ε = εel + εth + εpl
+
+Outside the elastic region, the viscoplastic strain response is given by:
+
+  εpl' = n p'
+
+where
+
+  n = ∂f/∂σ
+
+and p' obeys a Norton-Bailey power law:
+
+  p' = 1/tvp * (<f> / Kn)^nn
+
+Here <...> are the Macaulay brackets (a.k.a. positive part), and
+the yield criterion is of the von Mises type:
+
+  f = √(3/2 dev(σ_eff) : dev(σ_eff)) - (R0 + R)
+  σ_eff = σ - ∑ Xj
 
 See:
 
