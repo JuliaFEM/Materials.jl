@@ -266,7 +266,7 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     @unpack stress, R, X1, X2, X3 = state
     marshal(tensor::Symm2) = tovoigt(tensor)
     unmarshal(x::AbstractVector{T}) where T <: Real = fromvoigt(Symm2{T}, x)
-    function f(x::AbstractVector{<:Real})
+    function f(x::AbstractVector{<:Real})  # x = stress
         eltype = typeof(x[1])
         state = GenericChabocheThermalVariableState{eltype}(stress=unmarshal(x),
                                                             X1=X1,
@@ -495,9 +495,9 @@ end
     create_nonlinear_system_of_equations(material::GenericChabocheThermal{T}) where T <: Real
 
 Create and return an instance of the equation system for the incremental form of
-the evolution equations of the ChabocheThermal material.
+the evolution equations.
 
-Used internally for computing the plastic contribution in `integrate_material!`.
+Used internally for computing the viscoplastic contribution in `integrate_material!`.
 
 The input `material` represents the problem state at the end of the previous
 timestep. The created equation system will hold its own copy of that state.
