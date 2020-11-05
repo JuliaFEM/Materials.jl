@@ -658,6 +658,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Note the quantity w.r.t. which the function is to be autodiffed must be
     # a parameter.
     #
+    # TODO: Now we're computing only a 6×6 block. Compute the full Jacobian,
+    # TODO: to account for effects of σ_new and Δε on all components of r(x).
+    #
     function make_g_stress(R, X1, X2, X3)
         # Parameterized by σ_new, autodiff this at the solution point to get ∂r/∂σ_new.
         function g_stress!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = stress
