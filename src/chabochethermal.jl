@@ -6,7 +6,7 @@ module ChabocheThermalModule
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 
 import ..AbstractMaterial, ..AbstractMaterialState
-import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame, debang
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame
 import ..integrate_material!  # for method extension
 
 # parametrically polymorphic for any type representing ℝ
@@ -465,10 +465,10 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
         # Compute the new algorithmic Jacobian.
-        g_stress! = make_g_stress(R, X1, X2, X3)
-        g_strain! = make_g_strain(stress, R, X1, X2, X3)
-        drdstress = ForwardDiff.jacobian(debang(g_stress!), tovoigt(stress))
-        drdstrain = ForwardDiff.jacobian(debang(g_strain!), tovoigt(dstrain))
+        g_stress = make_g_stress(R, X1, X2, X3)
+        g_strain = make_g_strain(stress, R, X1, X2, X3)
+        drdstress = ForwardDiff.jacobian(g_stress, tovoigt(stress))
+        drdstrain = ForwardDiff.jacobian(g_strain, tovoigt(dstrain))
         D = fromvoigt(Symm4, -drdstress \ drdstrain)  # TODO: where the **** does the minus sign come from?
     end
     variables_new = GenericChabocheThermalVariableState{T}(stress = stress,
@@ -642,7 +642,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # The solution is x = x* such that g(x*) = 0.
     function g_state!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = state
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)
-        g!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain, mode=:full)
+        g!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain)
         return nothing
     end
 
@@ -658,26 +658,25 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Note the quantity w.r.t. which the function is to be autodiffed must be
     # a parameter.
     #
-    # TODO: Now we're computing only a 6×6 block. Compute the full Jacobian,
-    # TODO: to account for effects of σ_new and Δε on all components of r(x).
-    #
     function make_g_stress(R, X1, X2, X3)
         # Parameterized by σ_new, autodiff this at the solution point to get ∂r/∂σ_new.
-        function g_stress!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = stress
+        function g_stress(x::V) where V <: AbstractVector{<:Real}  # x = stress
             stress_new = fromvoigt(Symm2, x)
-            g!(F, stress_new, R, X1, X2, X3, dd.strain, mode=:stress_only)
-            return nothing
+            F = similar(x, eltype(x), (25,))
+            g!(F, stress_new, R, X1, X2, X3, dd.strain)
+            return F
         end
-        return g_stress!
+        return g_stress
     end
     function make_g_strain(stress, R, X1, X2, X3)
         # Parameterized by Δε, autodiff this at the solution point to get ∂r/∂(Δε).
-        function g_strain!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = dstrain
+        function g_strain(x::V) where V <: AbstractVector{<:Real}  # x = dstrain
             dstrain = fromvoigt(Symm2, x)
-            g!(F, stress, R, X1, X2, X3, dstrain, mode=:stress_only)
-            return nothing
+            F = similar(x, eltype(x), (25,))
+            g!(F, stress, R, X1, X2, X3, dstrain)
+            return F
         end
-        return g_strain!
+        return g_strain
     end
 
     # The evolution equations are written in an incremental form:
@@ -712,8 +711,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # layer, namely `nlsolve` or `ForwardDiff.jacobian`.)
     function g!(F::V, stress_new::Symm2{<:Real}, R_new::U,
                 X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
-                dstrain::Symm2{<:Real};
-                mode=:full) where {U <: Real, V <: AbstractVector{<:Real}}
+                dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
         f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
         n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
 
@@ -728,13 +726,12 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                  - dcontract(D, elastic_dstrain)
                  - dcontract(dDdtheta, elastic_strain) * dtemperature)
 
-        if mode === :full
-            F[7] = R_new - R - b*(Q - R_new)*dp
+        F[7] = R_new - R - b*(Q - R_new)*dp
 
-            tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
-            tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
-            tovoigt!(view(F, 20:25), X3_new - X3 - dp*(2.0/3.0*C3*n - D3*X3_new))
-        end
+        tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
+        tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
+        tovoigt!(view(F, 20:25), X3_new - X3 - dp*(2.0/3.0*C3*n - D3*X3_new))
+
         return nothing
     end
 
