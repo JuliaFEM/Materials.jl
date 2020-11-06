@@ -614,13 +614,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # far as the algorithm is concerned, σ_old and ε_old are constants. Therefore,
     # ∂(...)/∂(Δσ) = ∂(...)/∂(σ_new), and similarly for Δε, ε_new.
     #
-    # The residual function is r = r(x), where
-    #
-    #   x ≡ [σ R X1 X2 X3]
-    #
-    # is a vector of length 25, with tensors encoded in Voigt format.
-    #
-    # At the solution point, we have:
+    # Let r denote the residual function. At the solution point, we have:
     #
     #   r(Δσ, Δε) = 0
     #
