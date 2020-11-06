@@ -464,12 +464,13 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         plastic_strain += dp*n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
-        # Compute the new algorithmic Jacobian.
+        # Compute the new algorithmic Jacobian by implicit differentiation of the residual function,
+        # using `ForwardDiff` to compute the derivatives.
         g_stress = make_g_stress(R, X1, X2, X3)
         g_strain = make_g_strain(stress, R, X1, X2, X3)
         drdstress = ForwardDiff.jacobian(g_stress, tovoigt(stress))
         drdstrain = ForwardDiff.jacobian(g_strain, tovoigt(dstrain))
-        D = fromvoigt(Symm4, -drdstress \ drdstrain)  # TODO: where the **** does the minus sign come from?
+        D = fromvoigt(Symm4, -drdstress \ drdstrain)
     end
     variables_new = GenericChabocheThermalVariableState{T}(stress = stress,
                                                            X1 = X1,
@@ -619,17 +620,22 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #
     # is a vector of length 25, with tensors encoded in Voigt format.
     #
-    # Differentiating r w.r.t. the Voigt representation of Δε, the chain rule yields:
+    # At the solution point, we have:
     #
-    #   ∂r/∂(Δε) = ∂r/∂(Δσ) ∂(Δσ)/∂(Δε)  (matrix sizes [25×6] = [25×6] [6×6])
+    #   r(Δσ, Δε) = 0
     #
-    # Multiplying both sides from the left with the inverse of ∂r/∂(Δσ), we have:
+    # Consider Δσ as a function of Δε:  Δσ = Δσ(Δε)
+    # Differentiate both sides w.r.t. Δε:
     #
-    #   ∂(Δσ)/∂(Δε) = inv(∂r/∂(Δσ)) ∂r/∂(Δε)  (matrix sizes [6×6] = [6×25] [25×6])
+    #   dr/d(Δε) = ∂r/∂(Δσ) d(Δσ)/d(Δε) + ∂r/∂(Δε) = d(0)/d(Δε) = 0
+    #
+    # Solve for d(Δσ)/d(Δε):
+    #
+    #   d(Δσ)/d(Δε) = -∂r/∂(Δσ) \ ∂r/∂(Δε)  (matrix sizes [6×6] = [6×25] [25×6])
     #
     # We can compute that by
     #
-    #   ∂(Δσ)/∂(Δε) = ∂r/∂σ_new \ ∂r/∂(Δε)
+    #   d(Δσ)/d(Δε) = -∂r/∂σ_new \ ∂r/∂(Δε)
     #
     # We can autodiff the algorithm to obtain both RHS terms, if we parameterize
     # the residual function twice: by σ_new, and by Δε (keeping all other
