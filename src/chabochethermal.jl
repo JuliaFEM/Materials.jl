@@ -28,7 +28,9 @@ end
 # plasticity: yield criterion, flow rule, hardening
 """Parameter state for ChabocheThermal material.
 
-The classical viscoplastic material is a special case of this model with `C1 = C2 = 0`.
+The classical viscoplastic material is a special case of this model with `C1 = C2 = C3 = 0`.
+
+Maximum hardening for each backstress is `Cj / Dj`.
 
 Any parameter that is a `Function` should takes a single argument, the absolute
 temperature.
@@ -733,7 +735,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         return F
     end
 
-    # TODO: document: maximum hardening is Cj / Dj
     # TODO: add temperature dependence to hardening equations
     # TODO: decouple integrator
 
