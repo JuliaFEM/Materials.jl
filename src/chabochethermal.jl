@@ -254,16 +254,16 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     return gradient(f, stress)
 end
 
-# TODO: parameterize this with respect to the yield function (not just its value)
-"""Viscoplastic potential."""
-function dotpf(f::Real, material::GenericChabocheThermal{<:Real}, theta::Real)
-    p = material.parameters
-    tvp = p.tvp
-    Knf = p.Kn
-    nnf = p.nn
-    Kn = Knf(theta)
-    nn = nnf(theta)
-    return 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
+"""Norton-Bailey type power law."""
+function viscoplastic_potential(state::GenericChabocheThermalVariableState{<:Real},
+                                drivers::GenericChabocheThermalDriverState{<:Real},
+                                parameters::GenericChabocheThermalParameterState{<:Real})
+    f = yield_criterion(state, drivers, parameters)
+    @unpack tvp, Kn, nn = parameters
+    @unpack temperature = drivers
+    K = Kn(temperature)
+    n = nn(temperature)
+    return 1 / tvp * ((f >= 0.0 ? f : 0.0) / K)^n
 end
 
 
@@ -329,10 +329,6 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     Ef = p.E
     nuf = p.nu
     alphaf = p.alpha
-    R0f = p.R0
-    tvp = p.tvp
-    Knf = p.Kn
-    nnf = p.nn
 
     temperature = d.temperature
     dstrain = dd.strain
@@ -342,21 +338,17 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
     VariableState{U} = GenericChabocheThermalVariableState{U}
     DriverState{U} = GenericChabocheThermalDriverState{U}
-    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(VariableState{T}(stress=sigma,
-                                                                       X1=X1,
-                                                                       X2=X2,
-                                                                       X3=X3,
-                                                                       R=R),
+    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(VariableState{T}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
                                                       DriverState{T}(temperature=theta),
                                                       p)
     # n = ∂f/∂σ
-    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{T}(stress=sigma,
-                                                                      X1=X1,
-                                                                      X2=X2,
-                                                                      X3=X3,
-                                                                      R=R),
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{T}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
                                                      DriverState{T}(temperature=theta),
                                                      p)
+    # p'  (dp = p' * dtime)
+    dotpf(sigma, R, X1, X2, X3, theta) = viscoplastic_potential(VariableState{T}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
+                                                                DriverState{T}(temperature=theta),
+                                                                p)
 
     # Compute the elastic trial stress.
     #
@@ -429,8 +421,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                + dcontract(dDdtheta, elastic_strain) * dtemperature)
 
     # using elastic trial problem state
-    f = ff(stress, R, X1, X2, X3, temperature)
-    if f > 0.0
+    if ff(stress, R, X1, X2, X3, temperature) > 0.0
         rx!, rdstrain = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(rx!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
@@ -440,20 +431,17 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
         # using the new problem state
         temperature_new = temperature + dtemperature
-        f = ff(stress, R, X1, X2, X3, temperature_new)
-        n = nf(stress, R, X1, X2, X3, temperature_new)
 
         # Compute |∂εpl/∂t|
-        Kn = Knf(temperature_new)
-        nn = nnf(temperature_new)
-        dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn  # power law viscoplasticity (Norton-Bailey type)
-        dp = dotp*dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
+        dotp = dotpf(stress, R, X1, X2, X3, temperature_new)
+        dp = dotp * dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
 
-        plastic_strain += dp*n
+        n = nf(stress, R, X1, X2, X3, temperature_new)
+        plastic_strain += dp * n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
         # Compute the new algorithmic jacobian by implicit differentiation of the residual function,
-        # using `ForwardDiff` to compute the derivatives.
+        # using `ForwardDiff` to compute the derivatives. Details in `create_nonlinear_system_of_equations`.
         rf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
         drdx = ForwardDiff.jacobian(debang(rx!), x)
         drdstrain = ForwardDiff.jacobian(rf, tovoigt(dstrain))
@@ -462,10 +450,10 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     # TODO: jacobian w.r.t. temperature for coupled thermal multiphysics problems
     # We might actually want ∂V/∂D ∀ V ∈ state, D ∈ drivers (possibly excluding time).
     variables_new = VariableState{T}(stress = stress,
+                                     R = R,
                                      X1 = X1,
                                      X2 = X2,
                                      X3 = X3,
-                                     R = R,
                                      plastic_strain = plastic_strain,
                                      cumeq = cumeq,
                                      jacobian = D)
@@ -507,10 +495,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Ef = p.E
     nuf = p.nu
     alphaf = p.alpha
-    R0f = p.R0
-    tvp = p.tvp
-    Knf = p.Kn
-    nnf = p.nn
     C1f = p.C1
     D1f = p.D1
     C2f = p.C2
@@ -522,21 +506,14 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
 
     VariableState{U} = GenericChabocheThermalVariableState{U}
     DriverState{U} = GenericChabocheThermalDriverState{U}
-    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(VariableState{eltype(sigma)}(stress=sigma,
-                                                                                   X1=X1,
-                                                                                   X2=X2,
-                                                                                   X3=X3,
-                                                                                   R=R),
-                                                      DriverState{typeof(theta)}(temperature=theta),
-                                                      p)
     # n = ∂f/∂σ
-    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{eltype(sigma)}(stress=sigma,
-                                                                                  X1=X1,
-                                                                                  X2=X2,
-                                                                                  X3=X3,
-                                                                                  R=R),
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{eltype(sigma)}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
                                                      DriverState{typeof(theta)}(temperature=theta),
                                                      p)
+    # p'  (dp = p' * dtime)
+    dotpf(sigma, R, X1, X2, X3, theta) = viscoplastic_potential(VariableState{eltype(sigma)}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
+                                                                DriverState{typeof(theta)}(temperature=theta),
+                                                                p)
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
@@ -586,9 +563,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     D = Df(temperature_new)
     dDdtheta = dDdthetaf(temperature_new)
 
-    R0 = R0f(temperature_new)
-    Kn = Knf(temperature_new)
-    nn = nnf(temperature_new)
     C1 = C1f(temperature_new)
     D1 = D1f(temperature_new)
     C2 = C2f(temperature_new)
@@ -752,12 +726,11 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     function r!(F::V, stress_new::Symm2{<:Real}, R_new::U,
                 X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
                 dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
-        f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
-        n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
-        dotp = dotpf(f, material, temperature_new)
-        dp = dotp*dtime
+        dotp = dotpf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
+        dp = dotp * dtime
 
-        plastic_dstrain = dp*n
+        n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
+        plastic_dstrain = dp * n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
         elastic_strain = elastic_strain_old + elastic_dstrain
         tovoigt!(view(F, 1:6),
