@@ -444,6 +444,9 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         # using `ForwardDiff` to compute the derivatives. Details in `create_nonlinear_system_of_equations`.
         rf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
         drdx = ForwardDiff.jacobian(debang(rx!), x)
+        # We don't bother with offdiagscale, since this Voigt conversion is just a marshaling.
+        # All `rdstrain` does with the Voigt `dstrain` is to unmarshal it back into a tensor.
+        # All computations are performed in tensor format.
         drdstrain = ForwardDiff.jacobian(rf, tovoigt(dstrain))
         D = fromvoigt(Symm4, -(drdx \ drdstrain)[1:6, 1:6])
     end
@@ -689,7 +692,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                       X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
                       x::V) where V <: AbstractVector{<:Real}  # x = dstrain
         F = similar(x, eltype(x), (25,))
-        dstrain = fromvoigt(Symm2, x)  # we don't bother with offdiagscale, since this is just a marshaling.
+        # We don't bother with offdiagscale, since this Voigt conversion is just a marshaling.
+        # All computations are performed in tensor format.
+        dstrain = fromvoigt(Symm2, x)
         r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dstrain)
         return F
     end
