@@ -254,6 +254,18 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     return gradient(f, stress)
 end
 
+# TODO: parameterize this with respect to the yield function (not just its value)
+"""Viscoplastic potential."""
+function dotpf(f::Real, material::GenericChabocheThermal{<:Real}, theta::Real)
+    p = material.parameters
+    tvp = p.tvp
+    Knf = p.Kn
+    nnf = p.nn
+    Kn = Knf(theta)
+    nn = nnf(theta)
+    return 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
+end
+
 
 """
     integrate_material!(material::GenericChabocheThermal{T}) where T <: Real
@@ -742,9 +754,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                 dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
         f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
         n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
-
-        # TODO: decouple the viscoplastic potential into a function
-        dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
+        dotp = dotpf(f, material, temperature_new)
         dp = dotp*dtime
 
         plastic_dstrain = dp*n
