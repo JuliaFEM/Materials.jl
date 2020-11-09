@@ -328,22 +328,23 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
 
-    # TODO: alias locally to VariableState
-    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{T}(stress=sigma,
-                                                                                     X1=X1,
-                                                                                     X2=X2,
-                                                                                     X3=X3,
-                                                                                     R=R),
-                                              GenericChabocheThermalDriverState{T}(temperature=theta),
-                                              p)
+    VariableState{U} = GenericChabocheThermalVariableState{U}
+    DriverState{U} = GenericChabocheThermalDriverState{U}
+    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(VariableState{T}(stress=sigma,
+                                                                       X1=X1,
+                                                                       X2=X2,
+                                                                       X3=X3,
+                                                                       R=R),
+                                                      DriverState{T}(temperature=theta),
+                                                      p)
     # n = ∂f/∂σ
-    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{T}(stress=sigma,
-                                                                                    X1=X1,
-                                                                                    X2=X2,
-                                                                                    X3=X3,
-                                                                                    R=R),
-                                             GenericChabocheThermalDriverState{T}(temperature=theta),
-                                             p)
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{T}(stress=sigma,
+                                                                      X1=X1,
+                                                                      X2=X2,
+                                                                      X3=X3,
+                                                                      R=R),
+                                                     DriverState{T}(temperature=theta),
+                                                     p)
 
     # Compute the elastic trial stress.
     #
@@ -448,14 +449,14 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     end
     # TODO: jacobian w.r.t. temperature for coupled thermal multiphysics problems
     # We might actually want ∂V/∂D ∀ V ∈ state, D ∈ drivers (possibly excluding time).
-    variables_new = GenericChabocheThermalVariableState{T}(stress = stress,
-                                                           X1 = X1,
-                                                           X2 = X2,
-                                                           X3 = X3,
-                                                           R = R,
-                                                           plastic_strain = plastic_strain,
-                                                           cumeq = cumeq,
-                                                           jacobian = D)
+    variables_new = VariableState{T}(stress = stress,
+                                     X1 = X1,
+                                     X2 = X2,
+                                     X3 = X3,
+                                     R = R,
+                                     plastic_strain = plastic_strain,
+                                     cumeq = cumeq,
+                                     jacobian = D)
     material.variables_new = variables_new
     return nothing
 end
@@ -507,22 +508,23 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Qf = p.Q
     bf = p.b
 
-    # TODO: use eltype function instead of typeof
-    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{typeof(sigma[1,1])}(stress=sigma,
-                                                                                                  X1=X1,
-                                                                                                  X2=X2,
-                                                                                                  X3=X3,
-                                                                                                  R=R),
-                                              GenericChabocheThermalDriverState{typeof(theta)}(temperature=theta),
-                                              p)
+    VariableState{U} = GenericChabocheThermalVariableState{U}
+    DriverState{U} = GenericChabocheThermalDriverState{U}
+    ff(sigma, R, X1, X2, X3, theta) = yield_criterion(VariableState{eltype(sigma)}(stress=sigma,
+                                                                                   X1=X1,
+                                                                                   X2=X2,
+                                                                                   X3=X3,
+                                                                                   R=R),
+                                                      DriverState{typeof(theta)}(temperature=theta),
+                                                      p)
     # n = ∂f/∂σ
-    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(GenericChabocheThermalVariableState{typeof(sigma[1,1])}(stress=sigma,
-                                                                                                 X1=X1,
-                                                                                                 X2=X2,
-                                                                                                 X3=X3,
-                                                                                                 R=R),
-                                             GenericChabocheThermalDriverState{typeof(theta)}(temperature=theta),
-                                             p)
+    nf(sigma, R, X1, X2, X3, theta) = yield_jacobian(VariableState{eltype(sigma)}(stress=sigma,
+                                                                                  X1=X1,
+                                                                                  X2=X2,
+                                                                                  X3=X3,
+                                                                                  R=R),
+                                                     DriverState{typeof(theta)}(temperature=theta),
+                                                     p)
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
