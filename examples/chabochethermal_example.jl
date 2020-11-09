@@ -117,7 +117,7 @@ let
         stresses = [mat.variables.stress[1,1]]
         strains = [mat.drivers.strain[1,1]]
         for (Ta, Tb) in zip(timevar_temperature, timevar_temperature[2:end])
-            println("        Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C, ΔT = $(Tb - Ta)°C")
+            # println("        Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C, ΔT = $(Tb - Ta)°C")
             mat.drivers.temperature = Tb
             mat.ddrivers.temperature = Tb - Ta
             uniaxial_increment!(mat, dstrain11, dt)
