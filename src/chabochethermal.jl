@@ -6,7 +6,7 @@ module ChabocheThermalModule
 using LinearAlgebra, ForwardDiff, Tensors, NLsolve, Parameters
 
 import ..AbstractMaterial, ..AbstractMaterialState
-import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame
+import ..Utilities: Symm2, Symm4, isotropic_elasticity_tensor, isotropic_compliance_tensor, lame, debang
 import ..integrate_material!  # for method extension
 
 # parametrically polymorphic for any type representing ℝ
@@ -447,9 +447,9 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     # using elastic trial problem state
     f = ff(stress, R, X1, X2, X3, temperature)
     if f > 0.0
-        g_state!, make_g_stress, make_g_strain = create_nonlinear_system_of_equations(material)
+        rx!, rdstrain = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
-        res = nlsolve(g_state!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
+        res = nlsolve(rx!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
         x = res.zero
         stress, R, X1, X2, X3 = state_from_vector(x)
@@ -470,11 +470,10 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
         # Compute the new algorithmic jacobian by implicit differentiation of the residual function,
         # using `ForwardDiff` to compute the derivatives.
-        g_stress = make_g_stress(R, X1, X2, X3)
-        g_strain = make_g_strain(stress, R, X1, X2, X3)
-        drdstress = ForwardDiff.jacobian(g_stress, tovoigt(stress))
-        drdstrain = ForwardDiff.jacobian(g_strain, tovoigt(dstrain))
-        D = fromvoigt(Symm4, -drdstress \ drdstrain)
+        rf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
+        drdx = ForwardDiff.jacobian(debang(rx!), x)
+        drdstrain = ForwardDiff.jacobian(rf, tovoigt(dstrain))
+        D = fromvoigt(Symm4, -(drdx \ drdstrain)[1:6, 1:6])
     end
     # TODO: jacobian w.r.t. temperature for coupled thermal multiphysics problems
     # We might actually want ∂V/∂D ∀ V ∈ state, D ∈ drivers (possibly excluding time).
@@ -501,18 +500,18 @@ Used internally for computing the viscoplastic contribution in `integrate_materi
 The input `material` represents the problem state at the end of the previous
 timestep. The created equation system will hold its own copy of that state.
 
-The equation system is represented as a mutating function `g!` that computes the
+The equation system is represented as a mutating function `r!` that computes the
 residual:
 
 ```julia
-    g!(F::V, x::V) where V <: AbstractVector{<:Real}
+    r!(F::V, x::V) where V <: AbstractVector{<:Real}
 ```
 
 Both `F` (output) and `x` (input) are length-25 vectors containing
 [sigma, R, X1, X2, X3], in that order. The tensor quantities sigma,
 X1, X2, X3 are encoded in Voigt format.
 
-The function `g!` is intended to be handed over to `nlsolve`.
+The function `r!` is intended to be handed over to `nlsolve`.
 """
 function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T}) where T <: Real
     p = material.parameters
@@ -663,7 +662,8 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #
     #   dr/d(Δε) = d(0)/d(Δε)
     #
-    # and after applying the chain rule:
+    # Considering Δx as a function of Δε (locally, on the solution surface),
+    # and applying the chain rule, we have:
     #
     #   ∂r/∂(Δε) + ∂r/∂(Δx) d(Δx)/d(Δε) = 0
     #
@@ -683,57 +683,54 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Note this is slightly expensive. ∂r/∂x_new is a 25×25 matrix,
     # and ∂r/∂(Δε) is 25×6. So essentially, to obtain d(Δx)/d(Δε),
     # from which we can read off d(Δσ)/d(Δε), we must solve six
-    # linear equation systems, each of size 25.
+    # linear equation systems, each of size 25. (In a FEM solver,
+    # this must be done for each integration point.)
     #
     # But if we are willing to pay for that, we get the algorithmic jacobian
     # exactly (up to the effects of finite precision arithmetic) - which gives
     # us quadratic convergence in a FEM solver using this material model.
 
-    # For solving the equation system.
-    # Parameterized by the whole tentative new state suggested by `nlsolve`.
+    # Residual function. (Actual implementation in `r!`, below.)
     #
-    # Compute the residual. F is output, x is filled by NLsolve.
+    # This variant is for solving the equation system. F is output, x is filled by NLsolve.
     # The solution is x = x* such that g(x*) = 0.
-    function g_state!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = state
+    #
+    # This is a mutating function for performance reasons.
+    #
+    # Parameterized by the whole new state x_new.
+    # We can also autodiff this at the solution point to obtain ∂r/∂x_new.
+    function rx!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = new state
+        # IMPORTANT: We must here use new local variable names,
+        # so that we won't accidentally overwrite cell variables
+        # from the outer scope. (Those variables hold the *old* values
+        # at the start of the timestep.)
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)
-        g!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain)
+        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain)
         return nothing
     end
 
-    # TODO: compute the full algorithmic jacobian, as outlined in the above explanation.
-
-    # For algorithmic jacobian computation.
+    # Residual parameterized by Δε, for algorithmic jacobian computation.
+    # Autodiff this (w.r.t. strain) at the solution point to get ∂r/∂(Δε).
     #
-    # To compute the jacobian at the solution point, we must use the new state
-    # (stress, R, X1, X2, X3). We can't just copy the material instance, fill it
-    # with the new state, and let our caller use `create_nonlinear_system_of_equations`
-    # again, because the old state is needed in several internal computations above.
+    # This we only need to compute once per timestep, so this allocates
+    # the output array.
     #
-    # So we have factories, which freeze the given new state to the function that
-    # will be used for autodiffing, without touching the material instance.
+    # The quantity w.r.t. which the function is to be autodiffed must be a
+    # parameter, so `ForwardDiff` can promote it to use dual numbers.
+    # So `dstrain` must be a parameter. But the old state (from `material`)
+    # is used in several internal computations above. So the value of `dstrain`
+    # given to this routine **must be** `material.ddrivers.strain`.
     #
-    # Note the quantity w.r.t. which the function is to be autodiffed must be
-    # a parameter, so `ForwardDiff` can promote it to use dual numbers.
+    # We also need to pass the new state (the solution point) to the underlying
+    # residual function `r!`. Use the partial application pattern to provide that:
     #
-    function make_g_stress(R, X1, X2, X3)
-        # Parameterized by σ_new, autodiff this at the solution point to get ∂r/∂σ_new.
-        function g_stress(x::V) where V <: AbstractVector{<:Real}  # x = stress
-            stress_new = fromvoigt(Symm2, x)
-            F = similar(x, eltype(x), (25,))
-            g!(F, stress_new, R, X1, X2, X3, dd.strain)
-            return F
-        end
-        return g_stress
-    end
-    function make_g_strain(stress, R, X1, X2, X3)
-        # Parameterized by Δε, autodiff this at the solution point to get ∂r/∂(Δε).
-        function g_strain(x::V) where V <: AbstractVector{<:Real}  # x = dstrain
-            dstrain = fromvoigt(Symm2, x)
-            F = similar(x, eltype(x), (25,))
-            g!(F, stress, R, X1, X2, X3, dstrain)
-            return F
-        end
-        return g_strain
+    #   r(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)
+    #   ForwardDiff.jacobian(r, tovoigt(dstrain))
+    function rdstrain(stress_new, R_new, X1_new, X2_new, X3_new, x::V) where V <: AbstractVector{<:Real}  # x = dstrain
+        F = similar(x, eltype(x), (25,))
+        dstrain = fromvoigt(Symm2, x)  # we don't bother with offdiagscale, since this is just a marshaling.
+        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dstrain)
+        return F
     end
 
     # TODO: document: maximum hardening is Cj / Dj
@@ -768,7 +765,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #   n = ∂f/∂σ
     #
     # `F` is output, length 25.
-    function g!(F::V, stress_new::Symm2{<:Real}, R_new::U,
+    function r!(F::V, stress_new::Symm2{<:Real}, R_new::U,
                 X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
                 dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
         f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
@@ -795,7 +792,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         return nothing
     end
 
-    return g_state!, make_g_stress, make_g_strain
+    return rx!, rdstrain
 end
 
 end
