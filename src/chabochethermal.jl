@@ -134,7 +134,6 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
     return sigma, R, X1, X2, X3
 end
 
-# TODO: use `ForwardDiff` wrappers from Tensors.jl
 """
     elasticity_tensor(E::Function, nu::Function, theta::Real)
 
@@ -143,7 +142,7 @@ Usage example:
     E(θ) = ...
     ν(θ) = ...
     D(θ) = elasticity_tensor(E, ν, θ)
-    dDdθ(θ) = Symm4(ForwardDiff.derivative(D, θ))
+    dDdθ(θ) = gradient(D, θ)
 """
 function elasticity_tensor(E::Function, nu::Function, theta::Real)
     lambda, mu = lame(E(theta), nu(theta))
@@ -158,7 +157,7 @@ Usage example:
     E(θ) = ...
     ν(θ) = ...
     C(θ) = compliance_tensor(E, ν, θ)
-    dCdθ(θ) = Symm4(ForwardDiff.derivative(C, θ))
+    dCdθ(θ) = gradient(C, θ)
 """
 function compliance_tensor(E::Function, nu::Function, theta::Real)
     lambda, mu = lame(E(theta), nu(theta))
@@ -180,7 +179,7 @@ Usage example:
     α(θ) = ...
     θ₀ = ...
     εth(θ) = thermal_strain_tensor(α, θ₀, θ)
-    dεthdθ(θ) = Symm2(ForwardDiff.derivative(εth, θ))
+    dεthdθ(θ) = gradient(εth, θ)
 
 Given θ and Δθ, you can easily get the increment Δεth:
 
@@ -242,47 +241,17 @@ The return value is the symmetric rank-2 tensor `n`.
 function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                         drivers::GenericChabocheThermalDriverState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
-    # We could compute the full jacobian as follows:
-    #
-    # # The jacobian of the yield criterion with respect to `state`.
-    # #
-    # # The return value is a tuple as in `state_from_vector`, but each term
-    # # represents ∂f/∂V, where V is a state variable (σ, R, X1, X2, X3).
-    # #
-    # # Note ∂f/∂σ = n, the normal of the yield surface.
-    #
-    # function f(x::AbstractVector{<:Real})
-    #     sigma, R, X1, X2, X3 = state_from_vector(x)
-    #     state = GenericChabocheThermalVariableState{typeof(R)}(stress=sigma,
-    #                                                            X1=X1,
-    #                                                            X2=X2,
-    #                                                            X3=X3,
-    #                                                            R=R)
-    #     return [yield_criterion(state, drivers, parameters)]::Vector
-    # end
-    # @unpack stress, R, X1, X2, X3 = state
-    # J = ForwardDiff.jacobian(f, state_to_vector(stress, R, X1, X2, X3))
-    # # Since the yield function is scalar-valued, we can pun on `state_from_vector`
-    # # to interpret the components of the jacobian for us.
-    # # The result of `jacobian` is a row vector, so drop the singleton dimension.
-    # return state_from_vector(J[1,:])
-    #
-    # But we only need ∂f/∂σ, so let's compute only that to make this run faster.
+    # We only need ∂f/∂σ, so let's compute only that to make this run faster.
     @unpack stress, R, X1, X2, X3 = state
-    marshal(tensor::Symm2) = tovoigt(tensor)
-    unmarshal(x::AbstractVector{T}) where T <: Real = fromvoigt(Symm2{T}, x)
-    function f(x::AbstractVector{<:Real})  # x = stress
-        eltype = typeof(x[1])  # TODO: use eltype function instead of typeof
-        state = GenericChabocheThermalVariableState{eltype}(stress=unmarshal(x),
-                                                            X1=X1,
-                                                            X2=X2,
-                                                            X3=X3,
-                                                            R=R)
-        return [yield_criterion(state, drivers, parameters)]::Vector
+    function f(stress::Symm2{<:Real})
+        state = GenericChabocheThermalVariableState{eltype(stress)}(stress=stress,
+                                                                    X1=X1,
+                                                                    X2=X2,
+                                                                    X3=X3,
+                                                                    R=R)
+        return yield_criterion(state, drivers, parameters)
     end
-    J = ForwardDiff.jacobian(f, marshal(stress))
-    # The result is a row vector, so drop the singleton dimension.
-    return unmarshal(J[1,:])
+    return gradient(f, stress)
 end
 
 
@@ -434,11 +403,11 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     elastic_strain = dcontract(C, stress)
 
     thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-    thermal_strain_derivative(theta) = Symm2{T}(ForwardDiff.derivative(thermal_strainf, theta))
+    thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
     thermal_dstrain = thermal_strain_derivative(temperature) * dtemperature
 
     Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
-    dDdthetaf(theta) = Symm4{T}(ForwardDiff.derivative(Df, theta))
+    dDdthetaf(theta) = gradient(Df, theta)
     D = Df(temperature)
     dDdtheta = dDdthetaf(temperature)
     trial_elastic_dstrain = dstrain - thermal_dstrain
@@ -595,11 +564,11 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     temperature_new = temperature + dtemperature
 
     thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-    thermal_strain_derivative(theta) = Symm2{T}(ForwardDiff.derivative(thermal_strainf, theta))
+    thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
     thermal_dstrain = thermal_strain_derivative(temperature_new) * dtemperature
 
     Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
-    dDdthetaf(theta) = Symm4{T}(ForwardDiff.derivative(Df, theta))
+    dDdthetaf(theta) = gradient(Df, theta)
     D = Df(temperature_new)
     dDdtheta = dDdthetaf(temperature_new)
 
