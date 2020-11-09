@@ -130,6 +130,11 @@ let
         println("    $(strains[end]), $(stresses[end])")
         plot!(strains, stresses, label="\$\\sigma(\\varepsilon)\$ @ $(degreesC(timevar_temperature[1]))°C ... $(degreesC(timevar_temperature[end]))°C")
 
+        # TODO: cyclic temperature/strain test
+        #  - boomerang in elastic region, no hysteresis
+        #  - check that the endpoint stays the same
+        # TODO: add automated tests
+
         # plot!(xx2, yy2, label="...")  # to add new curves into the same figure
         xlabel!("\$\\varepsilon\$")
         ylabel!("\$\\sigma\$")

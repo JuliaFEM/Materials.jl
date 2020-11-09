@@ -24,6 +24,8 @@ I2 = Symm2(I(3))
     temperature::T = zero(T)
 end
 
+# TODO: hierarchize parameters: elasticity, kinematic hardening, isotropic hardening, ...
+# plasticity: yield criterion, flow rule, hardening
 """Parameter state for ChabocheThermal material.
 
 The classical viscoplastic material is a special case of this model with `C1 = C2 = 0`.
@@ -130,6 +132,7 @@ function state_from_vector(x::AbstractVector{T}) where T <: Real
     return sigma, R, X1, X2, X3
 end
 
+# TODO: use `ForwardDiff` wrappers from Tensors.jl
 """
     elasticity_tensor(E::Function, nu::Function, theta::Real)
 
@@ -237,7 +240,7 @@ The return value is the symmetric rank-2 tensor `n`.
 function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                         drivers::GenericChabocheThermalDriverState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
-    # We could compute the full jacobian like this:
+    # We could compute the full jacobian as follows:
     #
     # # The jacobian of the yield criterion with respect to `state`.
     # #
@@ -267,7 +270,7 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     marshal(tensor::Symm2) = tovoigt(tensor)
     unmarshal(x::AbstractVector{T}) where T <: Real = fromvoigt(Symm2{T}, x)
     function f(x::AbstractVector{<:Real})  # x = stress
-        eltype = typeof(x[1])
+        eltype = typeof(x[1])  # TODO: use eltype function instead of typeof
         state = GenericChabocheThermalVariableState{eltype}(stress=unmarshal(x),
                                                             X1=X1,
                                                             X2=X2,
@@ -354,6 +357,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dtemperature = dd.temperature
     @unpack stress, X1, X2, X3, plastic_strain, cumeq, R = v
 
+    # TODO: alias locally to VariableState
     ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{T}(stress=sigma,
                                                                                      X1=X1,
                                                                                      X2=X2,
@@ -464,7 +468,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         plastic_strain += dp*n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
-        # Compute the new algorithmic Jacobian by implicit differentiation of the residual function,
+        # Compute the new algorithmic jacobian by implicit differentiation of the residual function,
         # using `ForwardDiff` to compute the derivatives.
         g_stress = make_g_stress(R, X1, X2, X3)
         g_strain = make_g_strain(stress, R, X1, X2, X3)
@@ -472,6 +476,8 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         drdstrain = ForwardDiff.jacobian(g_strain, tovoigt(dstrain))
         D = fromvoigt(Symm4, -drdstress \ drdstrain)
     end
+    # TODO: jacobian w.r.t. temperature for coupled thermal multiphysics problems
+    # We might actually want ∂V/∂D ∀ V ∈ state, D ∈ drivers (possibly excluding time).
     variables_new = GenericChabocheThermalVariableState{T}(stress = stress,
                                                            X1 = X1,
                                                            X2 = X2,
@@ -531,6 +537,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Qf = p.Q
     bf = p.b
 
+    # TODO: use eltype function instead of typeof
     ff(sigma, R, X1, X2, X3, theta) = yield_criterion(GenericChabocheThermalVariableState{typeof(sigma[1,1])}(stress=sigma,
                                                                                                   X1=X1,
                                                                                                   X2=X2,
@@ -610,30 +617,77 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # To solve the equation system, we need to parameterize the residual function
     # by all unknowns.
     #
-    # To obtain the algorithmic Jacobian ∂(Δσ)/∂(Δε), first keep in mind that as
+    # To obtain the algorithmic jacobian ∂(Δσ)/∂(Δε), first keep in mind that as
     # far as the algorithm is concerned, σ_old and ε_old are constants. Therefore,
     # ∂(...)/∂(Δσ) = ∂(...)/∂(σ_new), and similarly for Δε, ε_new.
     #
-    # Let r denote the residual function. At the solution point, we have:
+    # Let r denote the residual function. For simplicity, consider only the increments
+    # Δε, Δσ for now (we will generalize below). At a solution point, we have:
     #
-    #   r(Δσ, Δε) = 0
+    #   r(Δε, Δσ) = 0
     #
-    # Consider Δσ as a function of Δε:  Δσ = Δσ(Δε)
-    # Differentiate both sides w.r.t. Δε:
+    # **On the condition that** we stay on the solution surface - i.e. it remains true
+    # that r = 0 - let us consider what happens to Δσ when we change Δε. On the solution
+    # surface, we can locally consider Δσ as a function of Δε:
     #
-    #   dr/d(Δε) = ∂r/∂(Δσ) d(Δσ)/d(Δε) + ∂r/∂(Δε) = d(0)/d(Δε) = 0
+    #   Δσ = Δσ(Δε)
     #
-    # Solve for d(Δσ)/d(Δε):
+    # Taking this into account, we differentiate both sides of  r = 0  w.r.t. Δε:
     #
-    #   d(Δσ)/d(Δε) = -∂r/∂(Δσ) \ ∂r/∂(Δε)  (matrix sizes [6×6] = [6×25] [25×6])
+    #   dr/d(Δε) = d(0)/d(Δε)
     #
-    # We can compute that by
+    # which yields, by applying the chain rule on the LHS:
+    #
+    #   ∂r/∂(Δε) + ∂r/∂(Δσ) d(Δσ)/d(Δε) = 0
+    #
+    # Solving for d(Δσ)/d(Δε) now yields:
+    #
+    #   d(Δσ)/d(Δε) = -∂r/∂(Δσ) \ ∂r/∂(Δε)
+    #
+    # which we can compute as:
     #
     #   d(Δσ)/d(Δε) = -∂r/∂σ_new \ ∂r/∂(Δε)
     #
-    # We can autodiff the algorithm to obtain both RHS terms, if we parameterize
-    # the residual function twice: by σ_new, and by Δε (keeping all other
-    # quantities constant).
+    # This completes the solution for the jacobian of the simple two-variable
+    # case. We can extend the same strategy to compute the jacobian for our
+    # actual problem. At a solution point, the residual equation is:
+    #
+    #   r(Δε, Δσ, ΔR, ΔX1, ΔX2, ΔX3) = 0
+    #
+    # Packing the state variables into the vector  x ≡ [σ R X1 X2 X3]  (with tensors
+    # encoded into Voigt notation), we can rewrite this as:
+    #
+    #   r(Δε, Δx) = 0
+    #
+    # Proceeding as before, we differentiate both sides w.r.t. Δε:
+    #
+    #   dr/d(Δε) = d(0)/d(Δε)
+    #
+    # and after applying the chain rule:
+    #
+    #   ∂r/∂(Δε) + ∂r/∂(Δx) d(Δx)/d(Δε) = 0
+    #
+    # Solving for d(Δx)/d(Δε) (which contains d(Δσ)/d(Δε) in its [1:6, 1:6] block) yields:
+    #
+    #   d(Δx)/d(Δε) = -∂r/∂(Δx) \ ∂r/∂(Δε)
+    #
+    # which we can compute as:
+    #
+    #   d(Δx)/d(Δε) = -∂r/∂x_new \ ∂r/∂(Δε)
+    #
+    # So, we can autodiff the algorithm to obtain both RHS terms, if we
+    # parameterize the residual function twice: once by x_new (which is
+    # already needed for solving the nonlinear equation system), and
+    # once by Δε (keeping all other quantities constant).
+    #
+    # Note this is slightly expensive. ∂r/∂x_new is a 25×25 matrix,
+    # and ∂r/∂(Δε) is 25×6. So essentially, to obtain d(Δx)/d(Δε),
+    # from which we can read off d(Δσ)/d(Δε), we must solve six
+    # linear equation systems, each of size 25.
+    #
+    # But if we are willing to pay for that, we get the algorithmic jacobian
+    # exactly (up to the effects of finite precision arithmetic) - which gives
+    # us quadratic convergence in a FEM solver using this material model.
 
     # For solving the equation system.
     # Parameterized by the whole tentative new state suggested by `nlsolve`.
@@ -646,17 +700,20 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         return nothing
     end
 
-    # For algorithmic Jacobian computation.
+    # TODO: compute the full algorithmic jacobian, as outlined in the above explanation.
+
+    # For algorithmic jacobian computation.
     #
-    # To compute the Jacobian at the solution point, we must use the new state
+    # To compute the jacobian at the solution point, we must use the new state
     # (stress, R, X1, X2, X3). We can't just copy the material instance, fill it
     # with the new state, and let our caller use `create_nonlinear_system_of_equations`
     # again, because the old state is needed in several internal computations above.
+    #
     # So we have factories, which freeze the given new state to the function that
     # will be used for autodiffing, without touching the material instance.
     #
     # Note the quantity w.r.t. which the function is to be autodiffed must be
-    # a parameter.
+    # a parameter, so `ForwardDiff` can promote it to use dual numbers.
     #
     function make_g_stress(R, X1, X2, X3)
         # Parameterized by σ_new, autodiff this at the solution point to get ∂r/∂σ_new.
@@ -678,6 +735,10 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         end
         return g_strain
     end
+
+    # TODO: document: maximum hardening is Cj / Dj
+    # TODO: add temperature dependence to hardening equations
+    # TODO: decouple integrator
 
     # The evolution equations are written in an incremental form:
     #
@@ -706,15 +767,14 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #   σ_eff = σ - ∑ Xj
     #   n = ∂f/∂σ
     #
-    # `F` is output. Size depends on mode; for `mode=:full`, the length is 25,
-    # and for `mode=:stress_only`, the length is 6. (This comes from the outer
-    # layer, namely `nlsolve` or `ForwardDiff.jacobian`.)
+    # `F` is output, length 25.
     function g!(F::V, stress_new::Symm2{<:Real}, R_new::U,
                 X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
                 dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
         f = ff(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
         n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
 
+        # TODO: decouple the viscoplastic potential into a function
         dotp = 1 / tvp * ((f >= 0.0 ? f : 0.0)/Kn)^nn
         dp = dotp*dtime
 
