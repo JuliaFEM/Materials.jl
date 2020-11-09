@@ -685,7 +685,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #
     #   r(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)
     #   ForwardDiff.jacobian(r, tovoigt(dstrain))
-    function rdstrain(stress_new, R_new, X1_new, X2_new, X3_new, x::V) where V <: AbstractVector{<:Real}  # x = dstrain
+    function rdstrain(stress_new::Symm2{<:Real}, R_new::Real,
+                      X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
+                      x::V) where V <: AbstractVector{<:Real}  # x = dstrain
         F = similar(x, eltype(x), (25,))
         dstrain = fromvoigt(Symm2, x)  # we don't bother with offdiagscale, since this is just a marshaling.
         r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dstrain)
