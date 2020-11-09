@@ -254,7 +254,12 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
     return gradient(f, stress)
 end
 
-"""Norton-Bailey type power law.
+"""
+    viscoplastic_potential(state::GenericChabocheThermalVariableState{<:Real},
+                           drivers::GenericChabocheThermalDriverState{<:Real},
+                           parameters::GenericChabocheThermalParameterState{<:Real})
+
+Norton-Bailey type power law.
 
 `parameters` should contain `tvp`, `Kn` and `nn`.
 `drivers` should contain `temperature`.
