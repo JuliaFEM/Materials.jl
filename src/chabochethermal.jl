@@ -72,12 +72,12 @@ end
 """Problem state for ChabocheThermal material.
 
 - `stress`: stress tensor
-- `X1`: backstress 1
-- `X2`: backstress 2
-- `X3`: backstress 3
+- `R`: yield strength (isotropic hardening)
+- `X1`: backstress 1 (kinematic hardening)
+- `X2`: backstress 2 (kinematic hardening)
+- `X3`: backstress 3 (kinematic hardening)
 - `plastic_strain`: plastic part of strain tensor
 - `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
-- `R`: yield strength
 - `jacobian`: ∂σij/∂εkl
 """
 @with_kw struct GenericChabocheThermalVariableState{T <: Real} <: AbstractMaterialState
