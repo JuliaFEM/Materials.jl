@@ -533,11 +533,10 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         dX2dtemperature = fromvoigt(Symm2, Jtemperature[14:19, 1])
         dX3dtemperature = fromvoigt(Symm2, Jtemperature[20:25, 1])
     else  # elastic region
-        elastic_dstress_wrt_dstrain(dstrain) = elastic_dstress(dstrain, dtemperature)
-        D = gradient(elastic_dstress_wrt_dstrain, dstrain)
-
-        elastic_dstress_wrt_dtemperature(dtemperature) = elastic_dstress(dstrain, dtemperature)
-        dstressdtemperature = gradient(elastic_dstress_wrt_dtemperature, dtemperature)
+        D = gradient(((dstrain) -> elastic_dstress(dstrain, dtemperature)),
+                     dstrain)
+        dstressdtemperature = gradient(((dtemperature) -> elastic_dstress(dstrain, dtemperature)),
+                                       dtemperature)
 
         # In the elastic region, the plastic variables stay constant,
         # so their jacobians vanish.
