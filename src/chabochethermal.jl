@@ -469,22 +469,26 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     C = Cf(temperature)
     elastic_strain = dcontract(C, stress)
 
-    thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-    thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-    thermal_dstrain = thermal_strain_derivative(temperature) * dtemperature
+    # This is a function so we can autodiff it to get the algorithmic jacobian in the elastic region.
+    function elastic_dstress(dstrain, dtemperature)
+        thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
+        thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
+        thermal_dstrain = thermal_strain_derivative(temperature) * dtemperature
 
-    Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
-    dDdthetaf(theta) = gradient(Df, theta)
-    D = Df(temperature)
-    dDdtheta = dDdthetaf(temperature)
-    trial_elastic_dstrain = dstrain - thermal_dstrain
+        Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
+        dDdthetaf(theta) = gradient(Df, theta)
+        D = Df(temperature)
+        dDdtheta = dDdthetaf(temperature)
+        trial_elastic_dstrain = dstrain - thermal_dstrain
 
-    # TODO: thermal effects for elastic jacobian?
-    stress += (dcontract(D, trial_elastic_dstrain)
-               + dcontract(dDdtheta, elastic_strain) * dtemperature)
+        return (dcontract(D, trial_elastic_dstrain)
+                + dcontract(dDdtheta, elastic_strain) * dtemperature)
+    end
+
+    stress += elastic_dstress(dstrain, dtemperature)
 
     # using elastic trial problem state
-    if ff(stress, R, X1, X2, X3, temperature) > 0.0
+    if ff(stress, R, X1, X2, X3, temperature) > 0.0  # plastic region
         rx!, rdstrain, rtemperature = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(rx!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
@@ -528,14 +532,19 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         dX1dtemperature = fromvoigt(Symm2, Jtemperature[8:13, 1])
         dX2dtemperature = fromvoigt(Symm2, Jtemperature[14:19, 1])
         dX3dtemperature = fromvoigt(Symm2, Jtemperature[20:25, 1])
-    else
+    else  # elastic region
+        elastic_dstress_wrt_dstrain(dstrain) = elastic_dstress(dstrain, dtemperature)
+        D = gradient(elastic_dstress_wrt_dstrain, dstrain)
+
+        elastic_dstress_wrt_dtemperature(dtemperature) = elastic_dstress(dstrain, dtemperature)
+        dstressdtemperature = gradient(elastic_dstress_wrt_dtemperature, dtemperature)
+
         # In the elastic region, the plastic variables stay constant,
         # so their jacobians vanish.
         dRdstrain = zero(Symm2{T})
         dX1dstrain = zero(Symm4{T})
         dX2dstrain = zero(Symm4{T})
         dX3dstrain = zero(Symm4{T})
-        dstressdtemperature = zero(Symm2{T})  # TODO: fix this
         dRdtemperature = zero(T)
         dX1dtemperature = zero(Symm2{T})
         dX2dtemperature = zero(Symm2{T})
