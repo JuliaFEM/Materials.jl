@@ -272,9 +272,15 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
     # We only need ∂f/∂σ, so let's compute only that to make this run faster.
     #
-    # TODO: The `gradient` wrapper of `Tensors.jl` is nice, but it doesn't tag its Dual,
-    # so using that, differentiating `yield_jacobian` with respect to stress doesn't work.
-    # For now, we do this part with `ForwardDiff.jacobian` directly.
+    # # TODO: The `gradient` wrapper of `Tensors.jl` is nice, but it doesn't tag its Dual.
+    # #
+    # # When using `Tensors.gradient` in `yield_jacobian` (n = ∂f/∂σ), the
+    # # differentiation of `yield_criterion` with respect to stress doesn't work
+    # # when computing the temperature jacobian for the residual function, which
+    # # needs ∂n/∂θ = ∂²f/∂σ∂θ. `ForwardDiff` fails to find an ordering for the
+    # # `Dual` terms (the temperature Dual having a tag, but the stress Dual not).
+    # #
+    # # Using `ForwardDiff.jacobian` directly, both Duals are tagged, so this works.
     #
     # @unpack stress, R, X1, X2, X3 = state
     # function f(stress::Symm2{<:Real})
