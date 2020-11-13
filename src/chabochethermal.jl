@@ -271,16 +271,35 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
                         drivers::GenericChabocheThermalDriverState{<:Real},
                         parameters::GenericChabocheThermalParameterState{<:Real})
     # We only need ∂f/∂σ, so let's compute only that to make this run faster.
+    #
+    # TODO: The `gradient` wrapper of `Tensors.jl` is nice, but it doesn't tag its Dual,
+    # so using that, differentiating `yield_jacobian` with respect to stress doesn't work.
+    # For now, we do this part with `ForwardDiff.jacobian` directly.
+    #
+    # @unpack stress, R, X1, X2, X3 = state
+    # function f(stress::Symm2{<:Real})
+    #     state = GenericChabocheThermalVariableState{eltype(stress)}(stress=stress,
+    #                                                                 R=R,
+    #                                                                 X1=X1,
+    #                                                                 X2=X2,
+    #                                                                 X3=X3)
+    #     return yield_criterion(state, drivers, parameters)
+    # end
+    # return gradient(f, stress)
     @unpack stress, R, X1, X2, X3 = state
-    function f(stress::Symm2{<:Real})
-        state = GenericChabocheThermalVariableState{eltype(stress)}(stress=stress,
-                                                                    X1=X1,
-                                                                    X2=X2,
-                                                                    X3=X3,
-                                                                    R=R)
-        return yield_criterion(state, drivers, parameters)
+    marshal(tensor::Symm2) = tovoigt(tensor)
+    unmarshal(x::AbstractVector{T}) where T <: Real = fromvoigt(Symm2{T}, x)
+    function f(x::AbstractVector{<:Real})  # x = stress
+        state = GenericChabocheThermalVariableState{eltype(x)}(stress=unmarshal(x),
+                                                               X1=X1,
+                                                               X2=X2,
+                                                               X3=X3,
+                                                               R=R)
+        return [yield_criterion(state, drivers, parameters)]::Vector
     end
-    return gradient(f, stress)
+    J = ForwardDiff.jacobian(f, marshal(stress))
+    # The result is a row vector, so drop the singleton dimension.
+    return unmarshal(J[1,:])
 end
 
 """
