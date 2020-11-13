@@ -78,17 +78,46 @@ end
 - `X3`: backstress 3 (kinematic hardening)
 - `plastic_strain`: plastic part of strain tensor
 - `cumeq`: cumulative equivalent plastic strain (scalar, ≥ 0)
-- `jacobian`: ∂σij/∂εkl
+- `jacobian`: ∂σij/∂εkl (algorithmic)
+
+The other `dXXXdYYY` properties are the algorithmic jacobians for the
+indicated variables.
+
+The elastic and thermal contributions to the strain tensor are not stored.
+To get them:
+
+    θ₀ = ...
+    θ = ...
+    p = material.parameters
+    v = material.variables
+
+    C(θ) = compliance_tensor(p.E, p.nu, θ)
+    elastic_strain = dcontract(C(θ), v.stress)
+
+    thermal_strain = thermal_strain_tensor(p.alpha, θ₀, θ)
+
+Then it holds that:
+
+    material.drivers.strain = elastic_strain + v.plastic_strain + thermal_strain
 """
 @with_kw struct GenericChabocheThermalVariableState{T <: Real} <: AbstractMaterialState
     stress::Symm2{T} = zero(Symm2{T})
+    R::T = zero(T)
     X1::Symm2{T} = zero(Symm2{T})
     X2::Symm2{T} = zero(Symm2{T})
     X3::Symm2{T} = zero(Symm2{T})
     plastic_strain::Symm2{T} = zero(Symm2{T})
     cumeq::T = zero(T)
-    R::T = zero(T)
     jacobian::Symm4{T} = zero(Symm4{T})
+    dRdstrain::Symm2{T} = zero(Symm2{T})
+    dX1dstrain::Symm4{T} = zero(Symm4{T})
+    dX2dstrain::Symm4{T} = zero(Symm4{T})
+    dX3dstrain::Symm4{T} = zero(Symm4{T})
+    dstressdtemperature::Symm2{T} = zero(Symm2{T})
+    dRdtemperature::T = zero(T)
+    dX1dtemperature::Symm2{T} = zero(Symm2{T})
+    dX2dtemperature::Symm2{T} = zero(Symm2{T})
+    dX3dtemperature::Symm2{T} = zero(Symm2{T})
 end
 
 # TODO: Does this eventually need a {T}?
@@ -436,7 +465,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
     # using elastic trial problem state
     if ff(stress, R, X1, X2, X3, temperature) > 0.0
-        rx!, rdstrain = create_nonlinear_system_of_equations(material)
+        rx!, rdstrain, rtemperature = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(rx!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
         converged(res) || error("Nonlinear system of equations did not converge!")
@@ -446,34 +475,69 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         # using the new problem state
         temperature_new = temperature + dtemperature
 
-        # Compute |∂εpl/∂t|
+        # Compute the new plastic strain
         dotp = dotpf(stress, R, X1, X2, X3, temperature_new)
-        dp = dotp * dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
-
         n = nf(stress, R, X1, X2, X3, temperature_new)
+
+        dp = dotp * dtime  # Δp, using backward Euler (dotp is |∂εpl/∂t| at the end of the timestep)
         plastic_strain += dp * n
         cumeq += dp   # cumulative equivalent plastic strain (note Δp ≥ 0)
 
-        # Compute the new algorithmic jacobian by implicit differentiation of the residual function,
+        # Compute the new algorithmic jacobian Jstrain by implicit differentiation of the residual function,
         # using `ForwardDiff` to compute the derivatives. Details in `create_nonlinear_system_of_equations`.
-        rf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
+        # We compute ∂V/∂D ∀ V ∈ state, D ∈ drivers (excluding time).
         drdx = ForwardDiff.jacobian(debang(rx!), x)
-        # We don't bother with offdiagscale, since this Voigt conversion is just a marshaling.
+
+        # Here we don't bother with offdiagscale, since this Voigt conversion is just a marshaling.
         # All `rdstrain` does with the Voigt `dstrain` is to unmarshal it back into a tensor.
         # All computations are performed in tensor format.
-        drdstrain = ForwardDiff.jacobian(rf, tovoigt(dstrain))
-        D = fromvoigt(Symm4, -(drdx \ drdstrain)[1:6, 1:6])
+        rdstrainf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
+        drdstrain = ForwardDiff.jacobian(rdstrainf, tovoigt(dstrain))
+        Jstrain = -drdx \ drdstrain
+        D = fromvoigt(Symm4, Jstrain[1:6, 1:6])
+        dRdstrain = fromvoigt(Symm2, Jstrain[7, 1:6])
+        dX1dstrain = fromvoigt(Symm4, Jstrain[8:13, 1:6])
+        dX2dstrain = fromvoigt(Symm4, Jstrain[14:19, 1:6])
+        dX3dstrain = fromvoigt(Symm4, Jstrain[20:25, 1:6])
+
+        rtemperaturef(theta) = rtemperature(stress, R, X1, X2, X3, theta)  # at solution point
+        drdtemperature = ForwardDiff.jacobian(rtemperaturef, [temperature_new])
+        Jtemperature = -drdx \ drdtemperature
+        dstressdtemperature = fromvoigt(Symm2, Jtemperature[1:6, 1])
+        dRdtemperature = Jtemperature[7, 1]
+        dX1dtemperature = fromvoigt(Symm2, Jtemperature[8:13, 1])
+        dX2dtemperature = fromvoigt(Symm2, Jtemperature[14:19, 1])
+        dX3dtemperature = fromvoigt(Symm2, Jtemperature[20:25, 1])
+    else
+        # In the elastic region, the plastic variables stay constant,
+        # so their jacobians vanish.
+        dRdstrain = zero(Symm2{T})
+        dX1dstrain = zero(Symm4{T})
+        dX2dstrain = zero(Symm4{T})
+        dX3dstrain = zero(Symm4{T})
+        dstressdtemperature = zero(Symm2{T})  # TODO: fix this
+        dRdtemperature = zero(T)
+        dX1dtemperature = zero(Symm2{T})
+        dX2dtemperature = zero(Symm2{T})
+        dX3dtemperature = zero(Symm2{T})
     end
-    # TODO: jacobian w.r.t. temperature for coupled thermal multiphysics problems
-    # We might actually want ∂V/∂D ∀ V ∈ state, D ∈ drivers (possibly excluding time).
-    variables_new = VariableState{T}(stress = stress,
-                                     R = R,
-                                     X1 = X1,
-                                     X2 = X2,
-                                     X3 = X3,
-                                     plastic_strain = plastic_strain,
-                                     cumeq = cumeq,
-                                     jacobian = D)
+    variables_new = VariableState{T}(stress=stress,
+                                     R=R,
+                                     X1=X1,
+                                     X2=X2,
+                                     X3=X3,
+                                     plastic_strain=plastic_strain,
+                                     cumeq=cumeq,
+                                     jacobian=D,
+                                     dRdstrain=dRdstrain,
+                                     dX1dstrain=dX1dstrain,
+                                     dX2dstrain=dX2dstrain,
+                                     dX3dstrain=dX3dstrain,
+                                     dstressdtemperature=dstressdtemperature,
+                                     dRdtemperature=dRdtemperature,
+                                     dX1dtemperature=dX1dtemperature,
+                                     dX2dtemperature=dX2dtemperature,
+                                     dX3dtemperature=dX3dtemperature)
     material.variables_new = variables_new
     return nothing
 end
@@ -565,29 +629,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     Cf(theta) = compliance_tensor(Ef, nuf, theta)
     C = Cf(temperature)
     elastic_strain_old = dcontract(C, stress)
-
-    # All other quantities are needed in the computation of the residual,
-    # at the new problem state, so we use the new temperature. It is a
-    # driver so we have its final value without iteration.
-    temperature_new = temperature + dtemperature
-
-    thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-    thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-    thermal_dstrain = thermal_strain_derivative(temperature_new) * dtemperature
-
-    Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
-    dDdthetaf(theta) = gradient(Df, theta)
-    D = Df(temperature_new)
-    dDdtheta = dDdthetaf(temperature_new)
-
-    C1 = C1f(temperature_new)
-    D1 = D1f(temperature_new)
-    C2 = C2f(temperature_new)
-    D2 = D2f(temperature_new)
-    C3 = C3f(temperature_new)
-    D3 = D3f(temperature_new)
-    Q = Qf(temperature_new)
-    b = bf(temperature_new)
 
     # To solve the equation system, we need to parameterize the residual function
     # by all unknowns.
@@ -681,7 +722,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         # from the outer scope. (Those variables hold the *old* values
         # at the start of the timestep.)
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)
-        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain)
+        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain, temperature + dtemperature)
         return nothing
     end
 
@@ -709,7 +750,16 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         # We don't bother with offdiagscale, since this Voigt conversion is just a marshaling.
         # All computations are performed in tensor format.
         dstrain = fromvoigt(Symm2, x)
-        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dstrain)
+        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dstrain, temperature + dtemperature)
+        return F
+    end
+
+    function rtemperature(stress_new::Symm2{<:Real}, R_new::Real,
+                          X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
+                          x::V) where V <: AbstractVector{<:Real}  # x = temperature_new
+        F = similar(x, eltype(x), (25,))
+        temperature_new = x[1]
+        r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain, temperature_new)
         return F
     end
 
@@ -744,23 +794,41 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     #   n = ∂f/∂σ
     #
     # `F` is output, length 25.
-    function r!(F::V, stress_new::Symm2{<:Real}, R_new::U,
+    function r!(F::V, stress_new::Symm2{<:Real}, R_new::Real,
                 X1_new::Symm2{<:Real}, X2_new::Symm2{<:Real}, X3_new::Symm2{<:Real},
-                dstrain::Symm2{<:Real}) where {U <: Real, V <: AbstractVector{<:Real}}
-        dotp = dotpf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
-        dp = dotp * dtime
+                dstrain::Symm2{<:Real}, temperature_new::Real) where {V <: AbstractVector{<:Real}}
+        # This stuff must be done here so we can autodiff it w.r.t. temperature_new.
+        thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
+        thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
+        thermal_dstrain = thermal_strain_derivative(temperature_new) * (temperature_new - temperature)
 
+        Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
+        dDdthetaf(theta) = gradient(Df, theta)
+        D = Df(temperature_new)
+        dDdtheta = dDdthetaf(temperature_new)
+
+        dotp = dotpf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
         n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
+
+        dp = dotp * dtime
         plastic_dstrain = dp * n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
         elastic_strain = elastic_strain_old + elastic_dstrain
         tovoigt!(view(F, 1:6),
                  stress_new - stress
                  - dcontract(D, elastic_dstrain)
-                 - dcontract(dDdtheta, elastic_strain) * dtemperature)
+                 - dcontract(dDdtheta, elastic_strain) * (temperature_new - temperature))
 
+        Q = Qf(temperature_new)
+        b = bf(temperature_new)
         F[7] = R_new - R - b*(Q - R_new)*dp
 
+        C1 = C1f(temperature_new)
+        D1 = D1f(temperature_new)
+        C2 = C2f(temperature_new)
+        D2 = D2f(temperature_new)
+        C3 = C3f(temperature_new)
+        D3 = D3f(temperature_new)
         tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
         tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
         tovoigt!(view(F, 20:25), X3_new - X3 - dp*(2.0/3.0*C3*n - D3*X3_new))
@@ -768,7 +836,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         return nothing
     end
 
-    return rx!, rdstrain
+    return rx!, rdstrain, rtemperature
 end
 
 end
