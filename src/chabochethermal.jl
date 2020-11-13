@@ -479,6 +479,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     dDdtheta = dDdthetaf(temperature)
     trial_elastic_dstrain = dstrain - thermal_dstrain
 
+    # TODO: thermal effects for elastic jacobian?
     stress += (dcontract(D, trial_elastic_dstrain)
                + dcontract(dDdtheta, elastic_strain) * dtemperature)
 
