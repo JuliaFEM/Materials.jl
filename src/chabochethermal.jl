@@ -309,7 +309,7 @@ function yield_jacobian(state::GenericChabocheThermalVariableState{<:Real},
 end
 
 """
-    viscoplastic_potential(state::GenericChabocheThermalVariableState{<:Real},
+    overstress_function(state::GenericChabocheThermalVariableState{<:Real},
                            drivers::GenericChabocheThermalDriverState{<:Real},
                            parameters::GenericChabocheThermalParameterState{<:Real})
 
@@ -323,7 +323,7 @@ Additionally, `state`, `drivers` and `parameters` will be passed to
 
 The return value is `dotp` that can be used in `dp = dotp * dtime`.
 """
-function viscoplastic_potential(state::GenericChabocheThermalVariableState{<:Real},
+function overstress_function(state::GenericChabocheThermalVariableState{<:Real},
                                 drivers::GenericChabocheThermalDriverState{<:Real},
                                 parameters::GenericChabocheThermalParameterState{<:Real})
     f = yield_criterion(state, drivers, parameters)
@@ -414,9 +414,9 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                                                      DriverState{T}(temperature=theta),
                                                      p)
     # p'  (dp = p' * dtime)
-    dotpf(sigma, R, X1, X2, X3, theta) = viscoplastic_potential(VariableState{T}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
-                                                                DriverState{T}(temperature=theta),
-                                                                p)
+    dotpf(sigma, R, X1, X2, X3, theta) = overstress_function(VariableState{T}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
+                                                             DriverState{T}(temperature=theta),
+                                                             p)
 
     # Compute the elastic trial stress.
     #
@@ -626,9 +626,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                                                      DriverState{typeof(theta)}(temperature=theta),
                                                      p)
     # p'  (dp = p' * dtime)
-    dotpf(sigma, R, X1, X2, X3, theta) = viscoplastic_potential(VariableState{eltype(sigma)}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
-                                                                DriverState{typeof(theta)}(temperature=theta),
-                                                                p)
+    dotpf(sigma, R, X1, X2, X3, theta) = overstress_function(VariableState{eltype(sigma)}(stress=sigma, R=R, X1=X1, X2=X2, X3=X3),
+                                                             DriverState{typeof(theta)}(temperature=theta),
+                                                             p)
 
     # Old problem state (i.e. the problem state at the time when this equation
     # system instance was created).
