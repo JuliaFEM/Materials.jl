@@ -477,23 +477,46 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
     # This is a function so we can autodiff it to get the algorithmic jacobian in the elastic region.
     function elastic_dstress(dstrain, dtemperature)
-        midpoint_temperature = temperature + dtemperature / 2
-        if typeof(midpoint_temperature) <: ForwardDiff.Dual
-            midpoint_temperature = ForwardDiff.value(midpoint_temperature)
+        # Δσ = D : Δεel + dD/dθ : εel Δθ
+        dT = dtemperature
+        if typeof(dT) <: ForwardDiff.Dual
+            dT = ForwardDiff.value(dT)
         end
+        endpoint_temperature = temperature + dT
 
         thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-        thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-        thermal_dstrain = thermal_strain_derivative(midpoint_temperature) * dtemperature
+        # # We could compute thermal_dstrain using the trapezoidal rule.
+        # thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
+        # thermal_dstrain = (thermal_strain_derivative(temperature)
+        #                    + thermal_strain_derivative(endpoint_temperature)) / 2 * dtemperature
+        # # But even better: we have the function, so just diff it. No need for a gradient.
+        # # (Just be careful of catastrophic cancellation?)
+        thermal_dstrain = thermal_strainf(temperature + dtemperature) - thermal_strainf(temperature)
+        trial_elastic_dstrain = dstrain - thermal_dstrain
 
         Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
         dDdthetaf(theta) = gradient(Df, theta)
-        D = Df(midpoint_temperature)
-        dDdtheta = dDdthetaf(midpoint_temperature)
-        trial_elastic_dstrain = dstrain - thermal_dstrain
 
+        #D = (Df(temperature) + Df(endpoint_temperature)) / 2  # linear approximation w.r.t. temperature
+        D = Df(endpoint_temperature)  # this seems to work best, but why?
+        # # Maybe use trapz?
+        # endpoint_elastic_strain = elastic_strain + trial_elastic_dstrain
+        # dDdthetaterm = (dcontract(dDdthetaf(temperature), elastic_strain)
+        #               + dcontract(dDdthetaf(endpoint_temperature), endpoint_elastic_strain)) / 2 * dtemperature
+        # # No... maybe use midpoint?
+        # midpoint_temperature = temperature + dT / 2
+        # midpoint_elastic_strain = elastic_strain + trial_elastic_dstrain / 2
+        # dDdthetaterm = dcontract(dDdthetaf(midpoint_temperature), midpoint_elastic_strain) * dtemperature
+        # # No... this seems to work best.
+        dDdthetaterm = dcontract(dDdthetaf(endpoint_temperature), elastic_strain) * dtemperature
         return (dcontract(D, trial_elastic_dstrain)
-                + dcontract(dDdtheta, elastic_strain) * dtemperature)
+                + dDdthetaterm)
+
+        # midpoint_temperature = temperature + dT / 2
+        # D = Df(midpoint_temperature)
+        # dDdtheta = dDdthetaf(midpoint_temperature)
+        # return (dcontract(D, trial_elastic_dstrain)
+        #         + dcontract(dDdtheta, elastic_strain) * dtemperature)
     end
 
     stress += elastic_dstress(dstrain, dtemperature)
