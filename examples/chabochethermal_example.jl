@@ -89,7 +89,7 @@ let
         constant_temperatures = [K(20.0), K(150.0), K(300.0), K(620.0)],
         timevar_temperature = range(T0, T0 + 130, length=n_timesteps + 1)
 
-        plot()  # make empty figure
+        p1 = plot()  # make empty figure
 
         println("Constant temperature tests")
         for T in constant_temperatures
@@ -116,10 +116,11 @@ let
         mat = ChabocheThermal(parameters=parameters)
         stresses = [mat.variables.stress[1,1]]
         strains = [mat.drivers.strain[1,1]]
-        for (Ta, Tb) in zip(timevar_temperature, timevar_temperature[2:end])
-            # println("        Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C, ΔT = $(Tb - Ta)°C")
-            mat.drivers.temperature = Tb
-            mat.ddrivers.temperature = Tb - Ta
+        temperature_pairs = zip(timevar_temperature, timevar_temperature[2:end])
+        for (Tcurr, Tnext) in temperature_pairs
+            # println("        Tcurr = $(degreesC(Tcurr))°C, Tnext = $(degreesC(Tnext))°C, ΔT = $(Tnext - Tcurr)°C")
+            mat.drivers.temperature = Tcurr
+            mat.ddrivers.temperature = Tnext - Tcurr
             uniaxial_increment!(mat, dstrain11, dt)
             # stress_driven_uniaxial_increment!(mat, dstress11, dt)
             update_material!(mat)
@@ -130,14 +131,75 @@ let
         println("    $(strains[end]), $(stresses[end])")
         plot!(strains, stresses, label="\$\\sigma(\\varepsilon)\$ @ $(degreesC(timevar_temperature[1]))°C ... $(degreesC(timevar_temperature[end]))°C")
 
-        # TODO: cyclic temperature/strain test
-        #  - boomerang in elastic region, no hysteresis
+        xlabel!("\$\\varepsilon\$")
+        ylabel!("\$\\sigma\$")
+        title!("Stress-strain response")
+
+        # cyclic temperature/strain test
+        #  - boomerang/fan in elastic region, no hysteresis
         #  - check that the endpoint stays the same
+        #    - It doesn't when temperature effects are enabled; linearly dt-dependent drift; from the integrator?
         # TODO: add automated tests
+        #  - use Abaqus as reference point? Ask Joona.
+
+        println("Cyclic test")
+        function cycle(x0, x1, halfn)  # 2 * halfn - 1 steps in total (duplicate at middle omitted)
+            function halfcycle(x0, x1, n)
+                dx = x1 - x0
+                #return x0 .+ dx .* sin.(range(0, pi / 2, length=n)).^2
+                return x0 .+ dx .* range(0, 1, length=n)
+            end
+            return cat(halfcycle(x0, x1, halfn),
+                       halfcycle(x1, x0, halfn)[2:end],
+                       dims=1)
+        end
+
+        strain_rate = 1e-4  # uniaxial constant strain rate, [1/s]
+        cycle_time = 10.0  # one complete cycle, [s]
+        ncycles = 5
+        n = 201  # points per half-cycle (including endpoints; so n - 1 timesteps per half-cycle)
+
+        Ta = T0  # temperature at cycle start, [K]
+        Tb = K(50.0)  # temperature at maximum strain (at cycle halfway point), [K]
+
+        # Observe that:
+        strain_max = strain_rate * (cycle_time / 2)
+        dt = cycle_time / (2 * (n - 1))
+
+        description = "$(ncycles) cycles, εₘₐₓ = $(strain_max), Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C"
+        println("    $(description)")
+        mat = ChabocheThermal(parameters=parameters)
+        stresses = [mat.variables.stress[1,1]]
+        strains = [mat.drivers.strain[1,1]]
+        temperatures = cycle(Ta, Tb, n)
+        temperature_pairs = zip(temperatures, temperatures[2:end])
+        dstrain11 = strain_rate * dt  # = strain_rate * (cycle_time / 2) / (n - 1) = strain_max / (n - 1)
+        dstrain11s = cat(repeat([dstrain11], n - 1),
+                         repeat([-dstrain11], n - 1),
+                         dims=1)
+        for cycle in 1:ncycles
+            println("    start cycle $(cycle), ε11 = $(strains[end]), σ11 = $(stresses[end])")
+            for ((Tcurr, Tnext), dstrain) in zip(temperature_pairs, dstrain11s)
+                mat.drivers.temperature = Tcurr
+                mat.ddrivers.temperature = Tnext - Tcurr
+                uniaxial_increment!(mat, dstrain, dt)
+                # stress_driven_uniaxial_increment!(mat, dstress11, dt)
+                update_material!(mat)
+                push!(strains, mat.drivers.strain[1,1])
+                push!(stresses, mat.variables.stress[1,1])
+            end
+        end
+        println("    ε11, σ11, at end of simulation")
+        println("    $(strains[end]), $(stresses[end])")
+        # println("    $(mat.variables.plastic_strain[end])")
+        p2 = plot(strains, stresses, label="\$\\sigma(\\varepsilon)\$, cyclic test")
 
         # plot!(xx2, yy2, label="...")  # to add new curves into the same figure
         xlabel!("\$\\varepsilon\$")
         ylabel!("\$\\sigma\$")
-        title!("Stress-strain response")
+        title!("Stress-strain response, $(description)")
+
+        # https://docs.juliaplots.org/latest/layouts/
+        plot(p1, p2, layout=(1, 2))
     end
 end
