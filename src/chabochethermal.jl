@@ -477,14 +477,19 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
 
     # This is a function so we can autodiff it to get the algorithmic jacobian in the elastic region.
     function elastic_dstress(dstrain, dtemperature)
+        midpoint_temperature = temperature + dtemperature / 2
+        if typeof(midpoint_temperature) <: ForwardDiff.Dual
+            midpoint_temperature = ForwardDiff.value(midpoint_temperature)
+        end
+
         thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
         thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-        thermal_dstrain = thermal_strain_derivative(temperature) * dtemperature
+        thermal_dstrain = thermal_strain_derivative(midpoint_temperature) * dtemperature
 
         Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
         dDdthetaf(theta) = gradient(Df, theta)
-        D = Df(temperature)
-        dDdtheta = dDdthetaf(temperature)
+        D = Df(midpoint_temperature)
+        dDdtheta = dDdthetaf(midpoint_temperature)
         trial_elastic_dstrain = dstrain - thermal_dstrain
 
         return (dcontract(D, trial_elastic_dstrain)
