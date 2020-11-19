@@ -476,47 +476,22 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     elastic_strain = dcontract(C, stress)
 
     # This is a function so we can autodiff it to get the algorithmic jacobian in the elastic region.
-    function elastic_dstress(dstrain, dtemperature)
-        # Δσ = D : Δεel + dD/dθ : εel Δθ
-        dT = dtemperature
-        if typeof(dT) <: ForwardDiff.Dual
-            dT = ForwardDiff.value(dT)
-        end
-        endpoint_temperature = temperature + dT
+    # Δσ = D : Δεel + dD/dθ : εel Δθ
+    function elastic_dstress(dstrain::Symm2{<:Real}, dtemperature::Real)
+        local temperature_new = temperature + dtemperature
 
         thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-        # # We could compute thermal_dstrain using the trapezoidal rule.
-        # thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-        # thermal_dstrain = (thermal_strain_derivative(temperature)
-        #                    + thermal_strain_derivative(endpoint_temperature)) / 2 * dtemperature
-        # # But even better: we have the function, so just diff it. No need for a gradient.
-        # # (Just be careful of catastrophic cancellation?)
-        thermal_dstrain = thermal_strainf(temperature + dtemperature) - thermal_strainf(temperature)
+        thermal_dstrain = thermal_strainf(temperature_new) - thermal_strainf(temperature)
         trial_elastic_dstrain = dstrain - thermal_dstrain
 
         Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
         dDdthetaf(theta) = gradient(Df, theta)
 
-        #D = (Df(temperature) + Df(endpoint_temperature)) / 2  # linear approximation w.r.t. temperature
-        D = Df(endpoint_temperature)  # this seems to work best, but why?
-        # # Maybe use trapz?
-        # endpoint_elastic_strain = elastic_strain + trial_elastic_dstrain
-        # dDdthetaterm = (dcontract(dDdthetaf(temperature), elastic_strain)
-        #               + dcontract(dDdthetaf(endpoint_temperature), endpoint_elastic_strain)) / 2 * dtemperature
-        # # No... maybe use midpoint?
-        # midpoint_temperature = temperature + dT / 2
-        # midpoint_elastic_strain = elastic_strain + trial_elastic_dstrain / 2
-        # dDdthetaterm = dcontract(dDdthetaf(midpoint_temperature), midpoint_elastic_strain) * dtemperature
-        # # No... this seems to work best.
-        dDdthetaterm = dcontract(dDdthetaf(endpoint_temperature), elastic_strain) * dtemperature
-        return (dcontract(D, trial_elastic_dstrain)
-                + dDdthetaterm)
-
-        # midpoint_temperature = temperature + dT / 2
-        # D = Df(midpoint_temperature)
-        # dDdtheta = dDdthetaf(midpoint_temperature)
-        # return (dcontract(D, trial_elastic_dstrain)
-        #         + dcontract(dDdtheta, elastic_strain) * dtemperature)
+        # Evaluating `Df` and `dDdthetaf` at `temperature_new` eliminates integrator drift
+        # in cyclic uniaxial loading conditions inside the elastic region.
+        # Note in the second term we use the *old* elastic strain.
+        return (dcontract(Df(temperature_new), trial_elastic_dstrain)
+                + dcontract(dDdthetaf(temperature_new), elastic_strain) * dtemperature)
     end
 
     stress += elastic_dstress(dstrain, dtemperature)
@@ -552,7 +527,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         rdstrainf(dstrain) = rdstrain(stress, R, X1, X2, X3, dstrain)  # at solution point
         drdstrain = ForwardDiff.jacobian(rdstrainf, tovoigt(dstrain))
         Jstrain = -drdx \ drdstrain
-        D = fromvoigt(Symm4, Jstrain[1:6, 1:6])
+        jacobian = fromvoigt(Symm4, Jstrain[1:6, 1:6])
         dRdstrain = fromvoigt(Symm2, Jstrain[7, 1:6])
         dX1dstrain = fromvoigt(Symm4, Jstrain[8:13, 1:6])
         dX2dstrain = fromvoigt(Symm4, Jstrain[14:19, 1:6])
@@ -567,8 +542,8 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         dX2dtemperature = fromvoigt(Symm2, Jtemperature[14:19, 1])
         dX3dtemperature = fromvoigt(Symm2, Jtemperature[20:25, 1])
     else  # elastic region
-        D = gradient(((dstrain) -> elastic_dstress(dstrain, dtemperature)),
-                     dstrain)
+        jacobian = gradient(((dstrain) -> elastic_dstress(dstrain, dtemperature)),
+                            dstrain)
         dstressdtemperature = gradient(((dtemperature) -> elastic_dstress(dstrain, dtemperature)),
                                        dtemperature)
 
@@ -590,7 +565,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
                                      X3=X3,
                                      plastic_strain=plastic_strain,
                                      cumeq=cumeq,
-                                     jacobian=D,
+                                     jacobian=jacobian,
                                      dRdstrain=dRdstrain,
                                      dX1dstrain=dX1dstrain,
                                      dX2dstrain=dX2dstrain,
@@ -779,10 +754,10 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
     # Parameterized by the whole new state x_new.
     # We can also autodiff this at the solution point to obtain ∂r/∂x_new.
     function rx!(F::V, x::V) where V <: AbstractVector{<:Real}  # x = new state
-        # IMPORTANT: We must here use new local variable names,
-        # so that we won't accidentally overwrite cell variables
+        # IMPORTANT: Careful here not to overwrite cell variables
         # from the outer scope. (Those variables hold the *old* values
-        # at the start of the timestep.)
+        # at the start of the timestep.) Either use a new name, or use
+        # the `local` annotation.
         stress_new, R_new, X1_new, X2_new, X3_new = state_from_vector(x)
         r!(F, stress_new, R_new, X1_new, X2_new, X3_new, dd.strain, temperature + dtemperature)
         return nothing
@@ -861,8 +836,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                 dstrain::Symm2{<:Real}, temperature_new::Real) where {V <: AbstractVector{<:Real}}
         # This stuff must be done here so we can autodiff it w.r.t. temperature_new.
         thermal_strainf(theta) = thermal_strain_tensor(alphaf, theta0, theta)
-        thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
-        thermal_dstrain = thermal_strain_derivative(temperature_new) * (temperature_new - temperature)
+        # thermal_strain_derivative(theta) = gradient(thermal_strainf, theta)
+        # thermal_dstrain = thermal_strain_derivative(temperature_new) * (temperature_new - temperature)
+        thermal_dstrain = thermal_strainf(temperature_new) - thermal_strainf(temperature)
 
         Df(theta) = elasticity_tensor(Ef, nuf, theta)  # dσ/dε, i.e. ∂σij/∂εkl
         dDdthetaf(theta) = gradient(Df, theta)
