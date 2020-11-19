@@ -145,9 +145,7 @@ let
         println("Cyclic test")
         function cycle(x0, x1, halfn)  # 2 * halfn - 1 steps in total (duplicate at middle omitted)
             function halfcycle(x0, x1, n)
-                dx = x1 - x0
-                #return x0 .+ dx .* sin.(range(0, pi / 2, length=n)).^2
-                return x0 .+ dx .* range(0, 1, length=n)
+                return x0 .+ (x1 - x0) .* range(0, 1, length=n)
             end
             return cat(halfcycle(x0, x1, halfn),
                        halfcycle(x1, x0, halfn)[2:end],
