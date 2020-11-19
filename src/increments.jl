@@ -41,7 +41,7 @@ among other kinds, to conveniently implement Newton-Raphson root finders.
 
 The `dstrain` supplied to this function is the initial guess for the
 optimization. At each iteration, it must be updated by the user-defined
-corrector `update_dstrain!`, whose call signature is expected to be:
+corrector `update_dstrain!`, whose call signature is:
 
     update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T})
         where V <: AbstractVector{T} where T <: Real
@@ -70,7 +70,8 @@ If `max_iter` is reached and the error measure is still `tol` or greater,
 
 To keep features orthogonal, the timestep is **not** committed automatically.
 We call `integrate_material!`, but not `update_material!`. In other words,
-we only update `material.variables_new`.
+we only update `material.variables_new`. To commit the timestep, call
+`update_material!` after the optimizer is done.
 """
 function find_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
                        dt::Real, update_dstrain!::Function;
@@ -107,13 +108,19 @@ The material state (`material.variables`) and any non-`missing` components of
 the *strain* increment `dstrain_knowns` are taken as prescribed. Any `missing`
 components will be solved for.
 
+This routine computes the `missing` components of the strain increment, such that
+those components of the new stress state that correspond to the `missing` strain
+increment components, remain at the old values stored in `material.variables.stress`.
+(Often in practice, those old values are set to zero, allowing simulation of
+uniaxial push-pull tests and similar.)
+
+"New" stress state means the stress state after integrating the material by
+one timestep of length `dt`.
+
 The type of the initial guess `dstrain` is `AbstractVector{Union{T, Missing}}`
 only so we can make it default to `dstrain_knowns`, which has that type. Any
-`missing` components in `dstrain` will be replaced by zeroes before we invoke
-the solver.
-
-This routine computes the other components of the strain increment such that the
-predicted stress state matches the stored one.
+`missing` components in the initial guess `dstrain` will be replaced by zeroes
+before we invoke the solver.
 
 See `find_dstrain!`.
 """
@@ -151,11 +158,16 @@ end
 Find a compatible strain increment for `material`.
 
 The material state (`material.variables`) and any non-`missing` components of
-the *stress* increment `dstress_knowns` are taken as prescribed. Any `missing`
-components will be solved for.
+the *stress* increment `dstress_knowns` are taken as prescribed.
 
-This routine computes a strain increment such that the predicted stress state
-matches the stored one.
+This routine computes a *strain* increment such that those components of the
+new stress state, that correspond to non-`missing` components of `dstress_knowns`,
+match those components of `material.variables.stress + dstress_knowns`.
+
+"New" stress state means the stress state after integrating the material by
+one timestep of length `dt`.
+
+`dstrain` is the initial guess for the strain increment.
 
 See `find_dstrain!`.
 """
@@ -195,9 +207,7 @@ end
 Find a compatible strain increment for `material`.
 
 The material state (`material.variables`) and the component 11 of the *strain*
-increment are taken as prescribed. This routine computes the other components of
-the strain increment such that the predicted stress state matches the stored
-one.
+increment are taken as prescribed.
 
 Convenience function; see `general_increment!`.
 
@@ -222,9 +232,7 @@ By "biaxial", we mean a stress state with one normal component and one shear
 component.
 
 The material state (`material.variables`) and the components 11 and 12 of the
-*strain* increment are taken as prescribed. This routine computes the other
-components of the strain increment such that the predicted stress state matches
-the stored one.
+*strain* increment are taken as prescribed.
 
 Convenience function; see `general_increment!`.
 
@@ -246,8 +254,7 @@ end
 Find a compatible strain increment for `material`.
 
 The material state (`material.variables`) and the component 11 of the *stress*
-increment are taken as prescribed. This routine computes a strain increment such
-that the predicted stress state matches the stored one.
+increment are taken as prescribed.
 
 Convenience function; see `stress_driven_general_increment!`.
 
