@@ -154,7 +154,7 @@ let
 
         strain_rate = 1e-4  # uniaxial constant strain rate, [1/s]
         cycle_time = 10.0  # one complete cycle, [s]
-        ncycles = 5
+        ncycles = 20
         n = 201  # points per half-cycle (including endpoints; so n - 1 timesteps per half-cycle)
 
         Ta = T0  # temperature at cycle start, [K]
