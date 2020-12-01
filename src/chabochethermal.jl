@@ -857,9 +857,83 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                  - dcontract(D, elastic_dstrain)
                  - dcontract(dDdtheta, elastic_strain) * (temperature_new - temperature))
 
+        # Reijo's equations (37) and (43), for exponentially saturating
+        # isotropic hardening, are:
+        #
+        #   Kiso = Kiso∞ (1 - exp(-hiso κiso / Kiso∞))
+        #   κiso' = 1 / tvp <fhat / σ0>^p
+        #
+        # Our equation for R in the case without thermal effects, where
+        # Q and b are constant, is:
+        #
+        #   R' = b (Q - R) p'
+        #
+        # We identify (LHS Reijo's notation; RHS Materials.jl notation):
+        #
+        #   Kiso = R, κiso = p, σ0 = Kn, p = nn
+        #   TODO: is fhat our f? Looks a bit different.
+        #
+        # So in the notation used in Materials.jl:
+        #
+        #   R = R∞ (1 - exp(-hiso p / R∞))
+        #   p' = 1 / tvp <fhat / Kn>^nn
+        #
+        # which leads to
+        #
+        #   R' = -R∞ * (-hiso p'/ R∞) exp(-hiso p / R∞)
+        #      = hiso exp(-hiso p / R∞) p'
+        #      = hiso (1 - R / R∞) p'
+        #      = hiso p' / R∞ (R∞ - R)
+        #      = (hiso / R∞) (R∞ - R) p'
+        #      ≡ b (Q - R) p'
+        #
+        # where
+        #
+        #   Q := R∞
+        #   b := hiso / R∞
+        #
+        # Thus we can write
+        #
+        #   R = Q (1 - exp(-b p))
+        #
+        # TODO: Why don't we just use this explicit formula to compute R?
+        # p is just cumeq, which is a state variable. p_new = p + dp,
+        # and Q and b are known explicitly.
+        #
+        #
+        # Now, if we model thermal effects by  Q = Q(θ),  b = b(θ),  we have
+        #
+        #   R' = ∂Q/∂θ θ' (1 - exp(-b p)) - Q (-b p)' exp(-b p)
+        #      = ∂Q/∂θ θ' (1 - exp(-b p)) + Q (∂b/∂θ θ' p + b p') exp(-b p)
+        #
+        # Observe that
+        #
+        #   Q exp(-b p) = Q - R
+        #   1 - exp(-b p) = R / Q
+        #
+        # so we can write
+        #
+        #   R' = (∂Q/∂θ / Q) θ' R + (∂b/∂θ θ' p + b p') (Q - R)
+        #      = b (Q - R) p' + ((∂Q/∂θ / Q) R + ∂b/∂θ (Q - R) p) θ'
+        #
+        # on the condition that Q ≠ 0.
+        #
+        # But that's a disaster when Q = 0 (no isotropic hardening),
+        # so let's use  R / Q = 1 - exp(-b p)  to obtain
+        #
+        #   R' = b (Q - R) p' + (∂Q/∂θ (1 - exp(-b p)) + ∂b/∂θ (Q - R) p) θ'
+        #
+        # which is the form we use here.
+        #
         Q = Qf(temperature_new)
         b = bf(temperature_new)
-        F[7] = R_new - R - b*(Q - R_new)*dp
+        dQdtheta = gradient(Qf, temperature_new)
+        dbdtheta = gradient(bf, temperature_new)
+        cumeq_new = v.cumeq + dp
+        F[7] = R_new - R - (b*(Q - R_new) * dp
+                            + (dQdtheta * (1 - exp(-b * cumeq_new))
+                               + dbdtheta * (Q - R_new) * cumeq_new)
+                            * (temperature_new - temperature))
 
         C1 = C1f(temperature_new)
         D1 = D1f(temperature_new)
