@@ -9,7 +9,8 @@ pyplot()
 let
     function constant(value::Real)
         function interpolate(x::Real)
-            return value
+            # `x` may be a `ForwardDiff.Dual` even when `value` is a float.
+            return convert(typeof(x), value)
         end
         return interpolate
     end
