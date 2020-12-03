@@ -800,7 +800,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         return F
     end
 
-    # TODO: add temperature dependence to hardening equations
     # TODO: decouple integrator
 
     # The evolution equations are written in an incremental form:
@@ -848,6 +847,8 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         dotp = dotpf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
         n = nf(stress_new, R_new, X1_new, X2_new, X3_new, temperature_new)
 
+        local dtemperature = temperature_new - temperature
+
         dp = dotp * dtime
         plastic_dstrain = dp * n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
@@ -855,7 +856,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         tovoigt!(view(F, 1:6),
                  stress_new - stress
                  - dcontract(D, elastic_dstrain)
-                 - dcontract(dDdtheta, elastic_strain) * (temperature_new - temperature))
+                 - dcontract(dDdtheta, elastic_strain) * dtemperature)
 
         # Reijo's equations (37) and (43), for exponentially saturating
         # isotropic hardening, are:
@@ -933,18 +934,114 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         F[7] = R_new - R - (b*(Q - R_new) * dp
                             + (dQdtheta * (1 - exp(-b * cumeq_new))
                                + dbdtheta * (Q - R_new) * cumeq_new)
-                            * (temperature_new - temperature))
+                            * dtemperature)
 
+        # Reijo's equation (44):
+        #
+        #   κk' = εp' - 1 / tvp <fhat / σ0>^p (3 / Kk∞) Kk
+        #   Kk = 2/3 hk κk
+        #
+        # In Materials.jl, we have:
+        #
+        #   εp' = p' n
+        #   p' = 1 / tvp <fhat / Kn>^nn
+        #
+        # so (in a mixed abuse of notation)
+        #
+        #   κk' = p' n - p' (3 / Kk∞) Kk
+        #       = p' (n - (3 / Kk∞) Kk)
+        #
+        # In the case without thermal effects, hk is a constant, so:
+        #
+        #   Kk' = 2/3 hk κk'
+        #       = 2/3 hk p' (n - (3 / Kk∞) Kk)
+        #       = p' (2/3 hk n - (2 hk / Kk∞) Kk)
+        #
+        # The equation used in Materials.jl is:
+        #
+        #   Xk' = p' (2/3 Ck n - Dk Xk)
+        #
+        # so we identify
+        #
+        #   Xk = Kk,  Ck = hk,  Dk = 2 hk / Kk∞
+        #
+        #
+        # Now let us model thermal effects by  Ck = Ck(θ),  Dk = Dk(θ).
+        # In Materials.jl notation, we have:
+        #
+        #   Kk∞ = 2 Ck / Dk
+        #
+        # when Dk ≠ 0, so if also Ck ≠ 0, then
+        #
+        #   3 / Kk∞ = 3/2 Dk / Ck
+        #
+        # We have:
+        #
+        #   κk' = p' (n - 3/2 (Dk / Ck) Kk)
+        #   Kk = 2/3 Ck κk
+        #
+        # Differentiating:
+        #
+        #   Kk' = 2/3 (Ck' κk + Ck κk')
+        #       = 2/3 (∂Ck/∂θ θ' κk + Ck κk')
+        #       = 2/3 (∂Ck/∂θ θ' κk + p' (Ck n - 3/2 Dk Kk))
+        #       = 2/3 ∂Ck/∂θ θ' κk + p' (2/3 Ck n - Dk Kk)
+        #
+        # To avoid the need to track the internal variables κk as part of the
+        # problem state, we can use:
+        #
+        #   Kk = 2/3 Ck κk
+        #
+        # So whenever Ck ≠ 0,
+        #
+        #   κk = 3/2 Kk / Ck
+        #
+        # ------------------------------------------------------------
+        #
+        # We identified  Ck = hk,  Dk = 2 hk / Kk∞.  The special case
+        # Ck(θ) = Dk(θ) ≡ 0  corresponds to  hk = 0,  Kk∞ → +∞. Then we have:
+        #
+        #   κk' = p' (n - (3 / Kk∞) Kk) → p' n
+        #   Kk' ≡ 0
+        #
+        # Also, because  Kk = 2/3 Ck κk,  we have  Kk ≡ 0.
+        #
+        # In this case we can discard the internal variables κk, because they
+        # only contribute to Kk? (TODO: how about f?)
+        #
+        # ------------------------------------------------------------
+        #
+        # ΔXk = 2/3 ∂Ck/∂θ Δθ κk + p' (2/3 Ck n - Dk Xk)
+        #     = 2/3 ∂Ck/∂θ Δθ (3/2 Xk / Ck) + p' (2/3 Ck n - Dk Xk)
+        #     = (∂Ck/∂θ / Ck) Xk Δθ + p' (2/3 Ck n - Dk Xk)
+        #
         C1 = C1f(temperature_new)
+        dC1dtheta = gradient(C1f, temperature_new)
         D1 = D1f(temperature_new)
         C2 = C2f(temperature_new)
+        dC2dtheta = gradient(C2f, temperature_new)
         D2 = D2f(temperature_new)
         C3 = C3f(temperature_new)
+        dC3dtheta = gradient(C3f, temperature_new)
         D3 = D3f(temperature_new)
-        tovoigt!(view(F,  8:13), X1_new - X1 - dp*(2.0/3.0*C1*n - D1*X1_new))
-        tovoigt!(view(F, 14:19), X2_new - X2 - dp*(2.0/3.0*C2*n - D2*X2_new))
-        tovoigt!(view(F, 20:25), X3_new - X3 - dp*(2.0/3.0*C3*n - D3*X3_new))
-
+        if C1 == 0.0
+            tovoigt!(view(F,  8:13), X1_new - X1)
+        else
+            tovoigt!(view(F,  8:13), X1_new - X1 - (dC1dtheta / C1 * X1_new * dtemperature
+                                                    + dp*(2.0/3.0*C1*n - D1*X1_new)))
+        end
+        if C2 == 0.0
+            tovoigt!(view(F, 14:19), X2_new - X2)
+        else
+            tovoigt!(view(F, 14:19), X2_new - X2 - (dC2dtheta / C2 * X2_new * dtemperature
+                                                    + dp*(2.0/3.0*C2*n - D2*X2_new)))
+        end
+        if C3 == 0.0
+            tovoigt!(view(F, 20:25), X3_new - X3)
+        else
+            tovoigt!(view(F, 20:25), X3_new - X3 - (dC3dtheta / C3 * X3_new * dtemperature
+                                                    + dp*(2.0/3.0*C3*n - D3*X3_new)))
+        end
         return nothing
     end
 
