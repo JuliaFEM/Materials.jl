@@ -1017,31 +1017,22 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         #
         C1 = C1f(temperature_new)
         dC1dtheta = gradient(C1f, temperature_new)
+        logdiff1 = (C1 != 0.0) ? (dC1dtheta / C1) : 0.0
         D1 = D1f(temperature_new)
         C2 = C2f(temperature_new)
         dC2dtheta = gradient(C2f, temperature_new)
+        logdiff2 = (C2 != 0.0) ? (dC2dtheta / C2) : 0.0
         D2 = D2f(temperature_new)
         C3 = C3f(temperature_new)
         dC3dtheta = gradient(C3f, temperature_new)
+        logdiff3 = (C3 != 0.0) ? (dC3dtheta / C3) : 0.0
         D3 = D3f(temperature_new)
-        if C1 == 0.0
-            tovoigt!(view(F,  8:13), X1_new - X1)
-        else
-            tovoigt!(view(F,  8:13), X1_new - X1 - (dC1dtheta / C1 * X1_new * dtemperature
-                                                    + dp*(2.0/3.0*C1*n - D1*X1_new)))
-        end
-        if C2 == 0.0
-            tovoigt!(view(F, 14:19), X2_new - X2)
-        else
-            tovoigt!(view(F, 14:19), X2_new - X2 - (dC2dtheta / C2 * X2_new * dtemperature
-                                                    + dp*(2.0/3.0*C2*n - D2*X2_new)))
-        end
-        if C3 == 0.0
-            tovoigt!(view(F, 20:25), X3_new - X3)
-        else
-            tovoigt!(view(F, 20:25), X3_new - X3 - (dC3dtheta / C3 * X3_new * dtemperature
-                                                    + dp*(2.0/3.0*C3*n - D3*X3_new)))
-        end
+        tovoigt!(view(F,  8:13), X1_new - X1 - (logdiff1 * X1_new * dtemperature
+                                                + dp*(2.0/3.0*C1*n - D1*X1_new)))
+        tovoigt!(view(F, 14:19), X2_new - X2 - (logdiff2 * X2_new * dtemperature
+                                                + dp*(2.0/3.0*C2*n - D2*X2_new)))
+        tovoigt!(view(F, 20:25), X3_new - X3 - (logdiff3 * X3_new * dtemperature
+                                                + dp*(2.0/3.0*C3*n - D3*X3_new)))
         return nothing
     end
 
