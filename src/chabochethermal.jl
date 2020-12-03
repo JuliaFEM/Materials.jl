@@ -1011,9 +1011,9 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         #
         # ------------------------------------------------------------
         #
-        # ΔXk = 2/3 ∂Ck/∂θ Δθ κk + p' (2/3 Ck n - Dk Xk)
-        #     = 2/3 ∂Ck/∂θ Δθ (3/2 Xk / Ck) + p' (2/3 Ck n - Dk Xk)
-        #     = (∂Ck/∂θ / Ck) Xk Δθ + p' (2/3 Ck n - Dk Xk)
+        # ΔXk = 2/3 ∂Ck/∂θ Δθ κk + Δp (2/3 Ck n - Dk Xk)
+        #     = 2/3 ∂Ck/∂θ Δθ (3/2 Xk / Ck) + Δp (2/3 Ck n - Dk Xk)
+        #     = (∂Ck/∂θ / Ck) Xk Δθ + Δp (2/3 Ck n - Dk Xk)
         #
         C1 = C1f(temperature_new)
         dC1dtheta = gradient(C1f, temperature_new)
