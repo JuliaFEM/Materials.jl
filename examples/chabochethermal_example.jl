@@ -1,12 +1,57 @@
 # This file is a part of JuliaFEM.
 # License is MIT: see https://github.com/JuliaFEM/Materials.jl/blob/master/LICENSE
 
+using Printf
 using Tensors
 using Plots
 using Materials
 pyplot()
 
 let
+    # https://rosettacode.org/wiki/Align_columns#Julia
+    # left/right/center justification of strings:
+    ljust(s::String, width::Integer) = s * " "^max(0, width - length(s))
+    # rjust(s::String, width::Integer) = " "^max(0, width - length(s)) * s
+    # function center(s::String, width::Integer)
+    #     pad = width - length(s)
+    #     if pad <= 0
+    #         return s
+    #     else
+    #         pad2 = div(pad, 2)
+    #         return " "^pad2 * s * " "^(pad - pad2)
+    #     end
+    # end
+
+    """    format_numbers(xx::Array{<:Real})
+
+    Format a rank-1 array of numbers to "%0.6g", align the ones column, and pad to the same length.
+
+    Return a rank-1 array of the resulting strings.
+    """
+    function format_numbers(xx::Array{<:Real})  # TODO: extend to handle complex numbers, too
+        # - real numbers x for which |x| < 1 always have "0." at the start
+        # - e-notation always has a dot
+        function find_ones_column(s::String)
+            dot_column = findfirst(".", s)
+            ones_column = (dot_column !== nothing) ? (dot_column[1] - 1) : length(s)
+            @assert (ones_column isa Integer) "failed to detect column for ones"
+            return ones_column
+        end
+
+        ss = [@sprintf("%0.6g", x) for x in xx]
+
+        ones_columns = [find_ones_column(s) for s in ss]
+        ones_target_column = maximum(ones_columns)
+        left_pads = ones_target_column .- ones_columns
+        @assert all(p >= 0 for p in left_pads) "negative padding length"
+        ss = [" "^p * s for (s, p) in zip(ss, left_pads)]
+
+        max_length = maximum(length(s) for s in ss)
+        ss = [ljust(s, max_length) for s in ss]
+
+        return ss
+    end
+
     function constant(value::Real)
         function interpolate(x::Real)
             # `x` may be a `ForwardDiff.Dual` even when `value` is a float.
@@ -68,8 +113,8 @@ let
                                                    # D1=constant(100.0),
                                                    # C2=constant(50000.0),
                                                    # D2=constant(1000.0),
-                                                   C1=constant(0.0),
-                                                   D1=constant(0.0),
+                                                   C1=constant(1000.0),
+                                                   D1=constant(10.0),
                                                    C2=constant(0.0),
                                                    D2=constant(0.0),
                                                    C3=constant(0.0),
@@ -92,6 +137,10 @@ let
 
         p1 = plot()  # make empty figure
 
+
+        # --------------------------------------------------------------------------------
+        # constant temperature, constant strain rate pull test
+
         println("Constant temperature tests")
         for T in constant_temperatures
             println("T = $(degreesC(T))°C")
@@ -111,6 +160,10 @@ let
             println("    $(strains[end]), $(stresses[end])")
             plot!(strains, stresses, label="\$\\sigma(\\varepsilon)\$ @ \$$(degreesC(T))°C\$")
         end
+
+
+        # --------------------------------------------------------------------------------
+        # varying temperature, constant strain rate pull test
 
         println("Time-varying temperature tests (activates ΔT terms)")
         println("T = $(degreesC(timevar_temperature[1]))°C ... $(degreesC(timevar_temperature[end]))°C, linear profile.")
@@ -134,20 +187,21 @@ let
 
         xlabel!("\$\\varepsilon\$")
         ylabel!("\$\\sigma\$")
-        title!("Stress-strain response")
+        title!("Uniaxial pull test (strain-driven)")
 
-        # cyclic temperature/strain test
+
+        # --------------------------------------------------------------------------------
+        # cyclic temperature/strain
+        #
         #  - boomerang/fan in elastic region, no hysteresis
         #  - check that the endpoint stays the same
         #    - It doesn't when temperature effects are enabled; linearly dt-dependent drift; from the integrator?
-        # TODO: add automated tests
-        #  - use Abaqus as reference point? Ask Joona.
 
-        println("Cyclic test")
+        println("Elastic behavior under cyclic loading")
+        function halfcycle(x0, x1, n)
+            return x0 .+ (x1 - x0) .* range(0, 1, length=n)
+        end
         function cycle(x0, x1, halfn)  # 2 * halfn - 1 steps in total (duplicate at middle omitted)
-            function halfcycle(x0, x1, n)
-                return x0 .+ (x1 - x0) .* range(0, 1, length=n)
-            end
             return cat(halfcycle(x0, x1, halfn),
                        halfcycle(x1, x0, halfn)[2:end],
                        dims=1)
@@ -177,7 +231,8 @@ let
                          repeat([-dstrain11], n - 1),
                          dims=1)
         for cycle in 1:ncycles
-            println("    start cycle $(cycle), ε11 = $(strains[end]), σ11 = $(stresses[end])")
+            cycle_str = @sprintf("%02d", cycle)
+            println("    start cycle $(cycle_str), ε11 = $(strains[end]), σ11 = $(stresses[end])")
             for ((Tcurr, Tnext), dstrain) in zip(temperature_pairs, dstrain11s)
                 mat.drivers.temperature = Tcurr
                 mat.ddrivers.temperature = Tnext - Tcurr
@@ -191,14 +246,198 @@ let
         println("    ε11, σ11, at end of simulation")
         println("    $(strains[end]), $(stresses[end])")
         # println("    $(mat.variables.plastic_strain[end])")
-        p2 = plot(strains, stresses, label="\$\\sigma(\\varepsilon)\$, cyclic test")
+        p2 = plot(strains, stresses, label="\$\\sigma(\\varepsilon)\$")
 
         # plot!(xx2, yy2, label="...")  # to add new curves into the same figure
         xlabel!("\$\\varepsilon\$")
         ylabel!("\$\\sigma\$")
-        title!("Stress-strain response, $(description)")
+        title!("Elastic test, $(description)")
+
+
+        # --------------------------------------------------------------------------------
+        # non-symmetric cyclic loading
+        #
+        # Strain-driven case. Should exhibit stress relaxation.
+
+        println("Non-symmetric strain cycle")
+        strain_rate = 1e-3  # uniaxial constant strain rate, [1/s]
+        cycle_time = 5.0  # one complete cycle, [s]
+        ncycles = 20
+        n = 51  # points per half-cycle (including endpoints; so n - 1 timesteps per half-cycle)
+
+        Ta = T0  # temperature at simulation start, [K]
+        Tb = K(50.0)  # temperature at maximum strain (at cycle halfway point), [K]
+        Tm = Ta + (Tb - Ta) / 2  # temperature at start of each cycle, [K]
+
+        strain_max = strain_rate * cycle_time  # accounting for initial loading, too.
+        dt = cycle_time / (2 * (n - 1))
+
+        description = "$(ncycles) cycles, εₘₐₓ = $(strain_max), Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C"
+        println("    $(description)")
+        mat = ChabocheThermal(parameters=parameters)  # TODO: always use the AF model here (one backstress).
+        stresses = [mat.variables.stress[1,1]]
+        strains = [mat.drivers.strain[1,1]]
+
+        # initial loading
+        temperatures = halfcycle(Ta, Tm, n)
+        temperature_pairs = zip(temperatures, temperatures[2:end])
+        dstrain11 = strain_rate * dt
+        dstrain11s = repeat([dstrain11], n - 1)
+
+        for ((Tcurr, Tnext), dstrain) in zip(temperature_pairs, dstrain11s)
+            mat.drivers.temperature = Tcurr
+            mat.ddrivers.temperature = Tnext - Tcurr
+            uniaxial_increment!(mat, dstrain, dt)
+            # stress_driven_uniaxial_increment!(mat, dstress11, dt)
+            update_material!(mat)
+            push!(strains, mat.drivers.strain[1,1])
+            push!(stresses, mat.variables.stress[1,1])
+        end
+
+        # cycles
+        eps0 = strains[end]  # for marking the start of the first cycle in the figure
+        sig0 = stresses[end]
+        temperatures = cycle(Tm, Tb, n)
+        temperature_pairs = zip(temperatures, temperatures[2:end])
+        dstrain11 = strain_rate * dt
+        dstrain11s = cat(repeat([dstrain11], n - 1),
+                         repeat([-dstrain11], n - 1),
+                         dims=1)
+        cycle_midpoint = n - 1
+
+        for cycle in 1:ncycles
+            cycle_str = @sprintf("%02d", cycle)
+            println("    cycle $(cycle_str)")
+            data_to_print = []
+            for (k, ((Tcurr, Tnext), dstrain)) in enumerate(zip(temperature_pairs, dstrain11s))
+                if k == 1 || k == cycle_midpoint
+                    push!(data_to_print, (strains[end], stresses[end]))
+                end
+
+                mat.drivers.temperature = Tcurr
+                mat.ddrivers.temperature = Tnext - Tcurr
+                uniaxial_increment!(mat, dstrain, dt)
+                # stress_driven_uniaxial_increment!(mat, dstress11, dt)
+                update_material!(mat)
+                push!(strains, mat.drivers.strain[1,1])
+                push!(stresses, mat.variables.stress[1,1])
+            end
+
+            strains_to_print, stresses_to_print = (collect(col) for col in zip(data_to_print...))
+            strains_to_print = format_numbers(strains_to_print)
+            stresses_to_print = format_numbers(stresses_to_print)
+            println("        start    ε11 = $(strains_to_print[1]), σ11 = $(stresses_to_print[1])")
+            println("        midpoint ε11 = $(strains_to_print[2]), σ11 = $(stresses_to_print[2])")
+        end
+
+        p3 = plot(strains, stresses, label="\$\\sigma(\\varepsilon)\$")
+        scatter!([eps0], [sig0], markercolor=:blue, label="First cycle start")
+        xlabel!("\$\\varepsilon\$")
+        ylabel!("\$\\sigma\$")
+        title!("Non-symmetric strain cycle, $(ncycles) cycles")
+
+
+        # --------------------------------------------------------------------------------
+        # stress-driven non-symmetric cycle
+        #
+        #   - AF (Chaboche with one kinematic hardening backstress) should lead to constant
+        #     ratcheting strain per stress cycle.
+
+        println("Non-symmetric stress cycle")
+        stress_rate = 40.0  # uniaxial constant stress rate, [MPa/s]
+        cycle_time = 5.0  # one complete cycle, [s]
+        ncycles = 40
+        n = 51  # points per half-cycle (including endpoints; so n - 1 timesteps per half-cycle)
+
+        Ta = T0  # temperature at simulation start, [K]
+        Tb = K(50.0)  # temperature at maximum strain (at cycle halfway point), [K]
+        Tm = Ta + (Tb - Ta) / 2  # temperature at start of each cycle, [K]
+
+        strain_max = strain_rate * cycle_time  # accounting for initial loading, too.
+        dt = cycle_time / (2 * (n - 1))
+
+        description = "$(ncycles) cycles, εₘₐₓ = $(strain_max), Ta = $(degreesC(Ta))°C, Tb = $(degreesC(Tb))°C"
+        println("    $(description)")
+        mat = ChabocheThermal(parameters=parameters)  # TODO: always use the AF model here (one backstress).
+        stresses = [mat.variables.stress[1,1]]
+        strains = [mat.drivers.strain[1,1]]
+
+        # initial loading
+        temperatures = halfcycle(Ta, Tm, n)
+        temperature_pairs = zip(temperatures, temperatures[2:end])
+        dstress11 = stress_rate * dt
+        dstress11s = repeat([dstress11], n - 1)
+
+        for ((Tcurr, Tnext), dstress) in zip(temperature_pairs, dstress11s)
+            mat.drivers.temperature = Tcurr
+            mat.ddrivers.temperature = Tnext - Tcurr
+            stress_driven_uniaxial_increment!(mat, dstress, dt)
+            update_material!(mat)
+            push!(strains, mat.drivers.strain[1,1])
+            push!(stresses, mat.variables.stress[1,1])
+        end
+
+        # cycles
+        eps0 = strains[end]
+        sig0 = stresses[end]
+        temperatures = cycle(Tm, Tb, n)
+        temperature_pairs = zip(temperatures, temperatures[2:end])
+        dstress11 = stress_rate * dt
+        dstress11s = cat(repeat([dstress11], n - 1),
+                         repeat([-dstress11], n - 1),
+                         dims=1)
+        cycle_midpoint = n - 1
+
+        cycle_start_strains = convert(Array{Float64}, [])  # TODO: what's the julianic way to do this?
+        for cycle in 1:ncycles
+            cycle_str = @sprintf("%02d", cycle)
+            println("    cycle $(cycle_str)")
+            push!(cycle_start_strains, strains[end])
+            data_to_print = []
+            for (k, ((Tcurr, Tnext), dstress)) in enumerate(zip(temperature_pairs, dstress11s))
+                if k == 1 || k == cycle_midpoint
+                    push!(data_to_print, (strains[end], stresses[end]))
+                end
+
+                mat.drivers.temperature = Tcurr
+                mat.ddrivers.temperature = Tnext - Tcurr
+                stress_driven_uniaxial_increment!(mat, dstress, dt)
+                update_material!(mat)
+                push!(strains, mat.drivers.strain[1,1])
+                push!(stresses, mat.variables.stress[1,1])
+            end
+
+            strains_to_print, stresses_to_print = (collect(col) for col in zip(data_to_print...))
+            strains_to_print = format_numbers(strains_to_print)
+            stresses_to_print = format_numbers(stresses_to_print)
+            println("        start    ε11 = $(strains_to_print[1]), σ11 = $(stresses_to_print[1])")
+            println("        midpoint ε11 = $(strains_to_print[2]), σ11 = $(stresses_to_print[2])")
+        end
+
+        println("Strain at cycle start:")
+        cycle_start_strains_to_print = format_numbers(cycle_start_strains)
+        diffs = diff(cycle_start_strains)
+        diffs_to_print = cat([nothing], format_numbers(diffs), dims=1)
+        for (cycle, (strain, dstrain)) in enumerate(zip(cycle_start_strains_to_print, diffs))
+            cycle_str = @sprintf("%02d", cycle)
+            println("    cycle $(cycle_str), ε11 = $(strain), Δε11 w.r.t. previous cycle = $(dstrain)")
+        end
+
+        p4 = plot(strains, stresses, label="\$\\sigma(\\varepsilon)\$")
+        scatter!([eps0], [sig0], markercolor=:blue, label="First cycle start")
+        xlabel!("\$\\varepsilon\$")
+        ylabel!("\$\\sigma\$")
+        title!("Non-symmetric stress cycle, $(ncycles) cycles")
+
+        # --------------------------------------------------------------------------------
+        # plot the results
 
         # https://docs.juliaplots.org/latest/layouts/
-        plot(p1, p2, layout=(1, 2))
+        plot(p1, p2, p3, p4, layout=(2, 2))
+
+        # TODO:
+        # - more tests based on Bari's thesis?
+        # - use Abaqus as reference point? Ask Joona.
+        # - ask Joona for more tests that could be applicable here?
     end
 end
