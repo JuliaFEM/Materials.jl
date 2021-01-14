@@ -212,13 +212,13 @@ function stress_driven_general_increment!(material::AbstractMaterial,
         #
         #   dε = dε₀ + dεₐ
         #
-        # where dε₀ is the dstrain from the solver, and the adjustment dεₐ is
+        # where dε₀ is the dstrain currently suggested by the optimizer, and the adjustment dεₐ is
         #
         #   dεₐ = -(∂σ/∂ε)⁻¹ dσₑ
         #   dσₑ = dσ - dσₖ
         #
         # Here dσₑ is the effective stress increment, and dσₖ is the prescribed
-        # (known) stress increment, which is zero for unknown components.
+        # (known) stress increment, which is zero for unknown dstress components.
         # As the Newton-Raphson iteration proceeds, dσₑ will converge to zero.
         #
         # Mutation of `dstress` doesn't matter, since `dstress` is freshly generated at each iteration.
