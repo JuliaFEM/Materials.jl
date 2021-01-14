@@ -897,10 +897,6 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         #
         #   R = Q (1 - exp(-b p))
         #
-        # TODO: Why don't we just use this explicit formula to compute R?
-        # p is just cumeq, which is a state variable. p_new = p + dp,
-        # and Q and b are known explicitly.
-        #
         #
         # Now, if we model thermal effects by  Q = Q(θ),  b = b(θ),  we have
         #
