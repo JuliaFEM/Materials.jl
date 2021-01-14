@@ -932,7 +932,7 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
                                + dbdtheta * (Q - R_new) * cumeq_new)
                             * dtemperature)
 
-        # Reijo's equation (44):
+        # Reijo's equations (44) and (38):
         #
         #   κk' = εp' - 1 / tvp <fhat / σ0>^p (3 / Kk∞) Kk
         #   Kk = 2/3 hk κk
@@ -992,6 +992,12 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         #
         #   κk = 3/2 Kk / Ck
         #
+        # Final result:
+        #
+        # Xk' = 2/3 ∂Ck/∂θ θ' κk + p' (2/3 Ck n - Dk Xk)
+        #     = 2/3 ∂Ck/∂θ θ' (3/2 Xk / Ck) + p' (2/3 Ck n - Dk Xk)
+        #     = (∂Ck/∂θ / Ck) Xk θ' + p' (2/3 Ck n - Dk Xk)
+        #
         # ------------------------------------------------------------
         #
         # We identified  Ck = hk,  Dk = 2 hk / Kk∞.  The special case
@@ -1003,9 +1009,11 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         # Also, because  Kk = 2/3 Ck κk,  we have  Kk ≡ 0.
         #
         # In this case we can discard the internal variables κk, because they
-        # only contribute to Kk? (TODO: how about f?)
+        # only contribute to Kk.
         #
         # ------------------------------------------------------------
+        #
+        # Incremental form:
         #
         # ΔXk = 2/3 ∂Ck/∂θ Δθ κk + Δp (2/3 Ck n - Dk Xk)
         #     = 2/3 ∂Ck/∂θ Δθ (3/2 Xk / Ck) + Δp (2/3 Ck n - Dk Xk)
