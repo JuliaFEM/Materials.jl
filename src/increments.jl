@@ -76,7 +76,7 @@ we only update `material.variables_new`. To commit the timestep, call
 function find_dstrain!(material::AbstractMaterial, dstrain::AbstractVector{<:Real},
                        dt::Real, update_dstrain!::Function;
                        max_iter::Integer=50, tol::Real=1e-9)
-    stress0 = tovoigt(material.variables.stress)  # observed
+    stress0 = tovoigt(material.variables.stress)  # stored
     T = typeof(dstrain[1])
     # @debug "---START---"
     for i=1:max_iter
@@ -141,6 +141,13 @@ function general_increment!(material::AbstractMaterial,
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
         dstrain_correction = -jacobian[unknowns, unknowns] \ dstress[unknowns]
         dstrain[unknowns] .+= dstrain_correction
+        # See the stress-driven routine (`stress_driven_general_increment!`) for the general idea
+        # of how this works. The differences to that algorithm are that:
+        #
+        #  - We update only components whose dstrain is not prescribed.
+        #  - We want all corresponding components of dstress to converge to zero in the
+        #    surrounding Newton-Raphson iteration.
+        #
         return norm(dstrain_correction)
     end
     find_dstrain!(material, dstrain_actual, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
@@ -164,6 +171,10 @@ This routine computes a *strain* increment such that those components of the
 new stress state, that correspond to non-`missing` components of `dstress_knowns`,
 match those components of `material.variables.stress + dstress_knowns`.
 
+For any `missing` components of `dstress_knowns`, the new stress state will match
+the corresponding components of `material.variables.stress`. (So the `missing`
+components act as if they were zero.)
+
 "New" stress state means the stress state after integrating the material by
 one timestep of length `dt`.
 
@@ -186,6 +197,18 @@ function stress_driven_general_increment!(material::AbstractMaterial,
     dstrain_actual::AbstractVector{T} = T[((x !== missing) ? x : T(0)) for x in dstrain]
     knowns = Integer[k for k in 1:6 if dstress_knowns[k] !== missing]
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
+        # For the stress-driven correction, we have
+        #
+        #   dε = dε₀ + dεₐ
+        #
+        # where dε₀ is the dstrain from the solver, and the adjustment dεₐ is
+        #
+        #   dεₐ = -(∂σ/∂ε)⁻¹ dσₑ
+        #   dσₑ = dσ - dσₖ
+        #
+        # Here dσₖ is the prescribed (known) stress increment (zero for unknown components).
+        # dσₑ will converge to zero as the Newton-Raphson iteration proceeds.
+        #
         # Mutation of `dstress` doesn't matter, since `dstress` is freshly generated at each iteration.
         dstress[knowns] -= dstress_knowns[knowns]
         dstrain_correction = -jacobian \ dstress
