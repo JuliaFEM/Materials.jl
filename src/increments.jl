@@ -20,6 +20,7 @@ import ..AbstractMaterial, ..integrate_material!
 import ..Utilities: Symm2
 
 export find_dstrain!, general_increment!, stress_driven_general_increment!,
+       general_mixed_increment!,
        uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!
 
 """
@@ -181,6 +182,9 @@ For any `missing` components of `dstress_knowns`, the new stress state will matc
 the corresponding components of `material.variables.stress`. (So the `missing`
 components act as if they were zero.)
 
+*All* strain increment components will be solved for. If you need to prescribe
+some of them, while also prescribing stresses, see `general_mixed_increment!`.
+
 "New" stress state means the stress state after integrating the material by
 one timestep of length `dt`.
 
@@ -220,6 +224,86 @@ function stress_driven_general_increment!(material::AbstractMaterial,
         dstress[dstress_knowns_idxs] -= dstress_knowns[dstress_knowns_idxs]
         dstrain_correction = -jacobian \ dstress
         dstrain .+= dstrain_correction
+        return norm(dstrain_correction)
+    end
+    find_dstrain!(material, dstrain_actual, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
+    dstrain[:] = dstrain_actual
+    return nothing
+end
+
+
+"""
+    general_mixed_increment!(material::AbstractMaterial,
+                             dstrain_knowns::AbstractVector{<:Union{T, Missing}},
+                             dstress_knowns::AbstractVector{<:Union{T, Missing}},
+                             dt::Real,
+                             dstrain::AbstractVector{<:Union{T, Missing}}=dstrain_knowns,
+                             max_iter::Integer=50, norm_acc::T=1e-9) where T <: Real
+
+Find a compatible strain increment for `material`. A combination of `general_increment!`
+and `stress_driven_general_increment!`, which allows for loadings where some components
+are strain-driven and some are stress-driven, such as the biaxial "bow-tie" and
+"reverse bow-tie" loadings of:
+
+    Corona, E., Hassan, T. and Kyriakides, S. (1996) On the Performance of
+    Kinematic Hardening Rules in Predicting a Class of Biaxial Ratcheting
+    Histories. International Journal of Plasticity, Vol 12, pp. 117--145.
+
+See also:
+
+    Bari, Shafiqul. (2001) Constitutive modeling for cyclic plasticity and ratcheting.
+    Ph.D. thesis, North Carolina State University.
+
+which compares the response of several different plasticity models under these loadings.
+
+Each known component must be either strain-driven or stress-driven, not both.
+
+The combination of the known components of dstrain and dstress must describe a
+valid material state. Otherwise the optimizer may fail to converge, or return
+a nonsensical solution.
+"""
+function general_mixed_increment!(material::AbstractMaterial,
+                                  dstrain_knowns::AbstractVector{<:Union{T, Missing}},
+                                  dstress_knowns::AbstractVector{<:Union{T, Missing}},
+                                  dt::Real,
+                                  dstrain::AbstractVector{<:Union{T, Missing}}=dstrain_knowns,
+                                  max_iter::Integer=50, norm_acc::T=1e-9) where T <: Real
+    function validate_size(name::String, v::AbstractVector)
+        if ndims(v) != 1 || size(v)[1] != 6
+            error("""Expected a length-6 vector for $(name), got $(typeof(v)) with size $(join(size(v), "×"))""")
+        end
+    end
+    validate_size("dstrain_knowns", dstrain_knowns)
+    validate_size("dstress_knowns", dstress_knowns)
+    validate_size("dstrain", dstrain)
+    dstrain_actual::AbstractVector{T} = T[((x !== missing) ? x : T(0)) for x in dstrain]
+    dstrain_knowns_idxs = Integer[k for k in 1:6 if dstrain_knowns[k] !== missing]
+    dstress_knowns_idxs = Integer[k for k in 1:6 if dstress_knowns[k] !== missing]
+    dstrain_unknown_idxs = setdiff(1:6, dstrain_knowns_idxs)
+    if length(dstrain_unknown_idxs) == 0
+        error("Optimizer needs at least one unknown dstrain component to solve for")
+    end
+
+    # check that no component is being prescribed both ways
+    let bad_idxs = intersect(dstrain_knowns_idxs, dstress_knowns_idxs)
+        if length(bad_idxs) > 0
+            plural = (length(bad_idxs) != 1) ? "s" : ""
+            error("""Each known component must be either strain- or stress-driven, not both; please check the input for component$(plural) $(bad_idxs)""")
+        end
+    end
+
+    function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
+        # This update algorithm is a combination of those in `general_increment!`
+        # and `stress_driven_general_increment!`.
+        #
+        #  - Like `general_increment!`, we update only components whose dstrain is not prescribed.
+        #  - Like `stress_driven_general_increment!`, we allow for nonzero target dstress.
+        #
+        dstress[dstress_knowns_idxs] -= dstress_knowns[dstress_knowns_idxs]
+        dstrain_correction = -(jacobian[dstrain_unknown_idxs, dstrain_unknown_idxs]
+                               \ dstress[dstrain_unknown_idxs])
+        dstrain[dstrain_unknown_idxs] .+= dstrain_correction
+
         return norm(dstrain_correction)
     end
     find_dstrain!(material, dstrain_actual, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)

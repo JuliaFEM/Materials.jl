@@ -98,6 +98,6 @@ export DSA, DSADriverState, DSAParameterState, DSAVariableState
 include("increments.jl")
 using .Increments
 export uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!,
-       general_increment!, stress_driven_general_increment!, find_dstrain!
+       general_increment!, stress_driven_general_increment!, general_mixed_increment!, find_dstrain!
 
 end
