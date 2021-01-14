@@ -137,10 +137,13 @@ function general_increment!(material::AbstractMaterial,
     validate_size("dstrain_knowns", dstrain_knowns)
     validate_size("dstrain", dstrain)
     dstrain_actual::AbstractVector{T} = T[((x !== missing) ? x : T(0)) for x in dstrain]
-    unknowns = Integer[k for k in 1:6 if dstrain_knowns[k] === missing]
+    dstrain_knowns_idxs = Integer[k for k in 1:6 if dstrain_knowns[k] !== missing]
+    dstrain_unknown_idxs = setdiff(1:6, dstrain_knowns_idxs)
+    if length(dstrain_unknown_idxs) == 0
+        error("Optimizer needs at least one unknown dstrain component to solve for")
+    end
+
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
-        dstrain_correction = -jacobian[unknowns, unknowns] \ dstress[unknowns]
-        dstrain[unknowns] .+= dstrain_correction
         # See the stress-driven routine (`stress_driven_general_increment!`) for the general idea
         # of how this works. The differences to that algorithm are that:
         #
@@ -148,6 +151,9 @@ function general_increment!(material::AbstractMaterial,
         #  - We want all corresponding components of dstress to converge to zero in the
         #    surrounding Newton-Raphson iteration.
         #
+        dstrain_correction = (-jacobian[dstrain_unknown_idxs, dstrain_unknown_idxs]
+                              \ dstress[dstrain_unknown_idxs])
+        dstrain[dstrain_unknown_idxs] .+= dstrain_correction
         return norm(dstrain_correction)
     end
     find_dstrain!(material, dstrain_actual, dt, update_dstrain!, max_iter=max_iter, tol=norm_acc)
@@ -195,7 +201,8 @@ function stress_driven_general_increment!(material::AbstractMaterial,
     validate_size("dstress_knowns", dstress_knowns)
     validate_size("dstrain", dstrain)
     dstrain_actual::AbstractVector{T} = T[((x !== missing) ? x : T(0)) for x in dstrain]
-    knowns = Integer[k for k in 1:6 if dstress_knowns[k] !== missing]
+    dstress_knowns_idxs = Integer[k for k in 1:6 if dstress_knowns[k] !== missing]
+
     function update_dstrain!(dstrain::V, dstress::V, jacobian::AbstractArray{T}) where V <: AbstractVector{T} where T <: Real
         # For the stress-driven correction, we have
         #
@@ -210,7 +217,7 @@ function stress_driven_general_increment!(material::AbstractMaterial,
         # dσₑ will converge to zero as the Newton-Raphson iteration proceeds.
         #
         # Mutation of `dstress` doesn't matter, since `dstress` is freshly generated at each iteration.
-        dstress[knowns] -= dstress_knowns[knowns]
+        dstress[dstress_knowns_idxs] -= dstress_knowns[dstress_knowns_idxs]
         dstrain_correction = -jacobian \ dstress
         dstrain .+= dstrain_correction
         return norm(dstrain_correction)
