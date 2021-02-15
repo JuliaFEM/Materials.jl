@@ -51,20 +51,24 @@ temperature.
 - `b`: rate of convergence to isotropic hardening saturation (dimensionless)
 """
 @with_kw struct GenericChabocheThermalParameterState{T <: Real} <: AbstractMaterialState
-    theta0::T = zero(T)
+    theta0::T = zero(T)  # reference temperature for thermal behavior
+    # basic material parameters
     E::Function = (theta::Real -> zero(T))
     nu::Function = (theta::Real -> zero(T))
     alpha::Function = (theta::Real -> zero(T))
     R0::Function = (theta::Real -> zero(T))
+    # parameters for viscoplastic overstress model
     tvp::T = zero(T)
     Kn::Function = (theta::Real -> zero(T))
     nn::Function = (theta::Real -> zero(T))
+    # kinematic hardening parameters
     C1::Function = (theta::Real -> zero(T))
     D1::Function = (theta::Real -> zero(T))
     C2::Function = (theta::Real -> zero(T))
     D2::Function = (theta::Real -> zero(T))
     C3::Function = (theta::Real -> zero(T))
     D3::Function = (theta::Real -> zero(T))
+    # isotropic hardening parameters
     Q::Function = (theta::Real -> zero(T))
     b::Function = (theta::Real -> zero(T))
 end
