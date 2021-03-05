@@ -429,6 +429,48 @@ let
         ylabel!("\$\\sigma\$")
         title!("Non-symmetric stress cycle, $(ncycles) cycles")
 
+
+        # --------------------------------------------------------------------------------
+        # TODO:
+        # - more tests based on Bari's thesis
+        # - we need to implement pure plasticity (compute dotp from the consistency condition)
+        #   in order to compare to Bari's results.
+        #
+        # 1 ksi = 6.8947572932 MPa
+        #
+        # From Bari's thesis, paper 1, p. 25 (PDF page 31):
+        #
+        # E = 26300 ksi = 181332.11681116 MPa
+        # ν = 0.302
+        # σ₀ = 18.8 ksi = 129.62143711216 MPa (initial yield)
+        # C₁ = 60000 ksi = 413685.437592 MPa
+        # C₂ = 12856 ksi = 88638.9997613792 MPa
+        # C₃ = 455 ksi = 3137.1145684059998 MPa
+        # γ₁ = 20000 (D₁ in Materials.jl)
+        # γ₂ = 800
+        # γ₃ = 9
+        #
+        # From the article text and figure captions, these values seem to be for CS1026 steel.
+        #
+        # c = 6.8947572932  # MPa/ksi
+        # parameters = ChabocheThermalParameterState(theta0=T0,
+        #                                            E=constant(26300*c),
+        #                                            nu=constant(0.302),
+        #                                            alpha=constant(1.216e-5),  # not used in tests based on Bari
+        #                                            R0=constant(18.8*c),
+        #                                            # viscous hardening in constant strain rate test: (tvp * ε')^(1/nn) * Kn
+        #                                            tvp=1000.0,
+        #                                            Kn=constant(0.0),  # TODO
+        #                                            nn=constant(0.0),  # TODO
+        #                                            C1=constant(60000*c),
+        #                                            D1=constant(20000),
+        #                                            C2=constant(12856*c),
+        #                                            D2=constant(800),
+        #                                            C3=constant(455*c),
+        #                                            D3=constant(9),
+        #                                            Q=constant(0.0),
+        #                                            b=constant(0.0))
+
         # --------------------------------------------------------------------------------
         # plot the results
 
@@ -436,8 +478,57 @@ let
         plot(p1, p2, p3, p4, layout=(2, 2))
 
         # TODO:
-        # - more tests based on Bari's thesis?
-        # - use Abaqus as reference point? Ask Joona.
-        # - ask Joona for more tests that could be applicable here?
+        # - use Abaqus as reference point. Data provided by Joona.
+        # - the data describes a strain-driven uniaxial pull in the 22 direction.
+        let path = joinpath("test_chabochethermal", "chabochethermal_cyclic_test.rpt"),
+            data = readdlm(path, Float64; skipstart=4),
+            ts = data[:,1],
+            s11_ = data[:,2],
+            s12_ = data[:,3],
+            s13_ = data[:,4],
+            s22_ = data[:,5],
+            s23_ = data[:,6],
+            s33_ = data[:,7],
+            e11_ = data[:,8],
+            e12_ = data[:,9],
+            e13_ = data[:,10],
+            e22_ = data[:,11],
+            e23_ = data[:,12],
+            e33_ = data[:,13],
+            cumeq_ = data[:, 14],
+            temperature_ = data[:, 15],
+            strains = [[e11_[i], e22_[i], e33_[i], e23_[i], e13_[i], e12_[i]] for i in 1:length(ts)],
+            T0 = K(23.0),
+            T1 = K(400.0),
+            parameters = ChabocheThermalParameterState(theta0=T0,
+                                                       E=capped_linear(T0, 200.0e3, T1, 120.0e3),
+                                                       nu=capped_linear(T0, 0.3, T1, 0.45),
+                                                       alpha=capped_linear(K(0.0), 1.0e-5, T1, 1.5e-5),
+                                                       R0=capped_linear(T0, 100.0, T1, 50.0),
+                                                       # viscous hardening in constant strain rate test: (tvp * ε')^(1/nn) * Kn
+                                                       tvp=1.0,
+                                                       Kn=capped_linear(T0, 50.0, K(0.0), 250.0),  # TODO: fix
+                                                       nn=capped_linear(T0, 10.0, T1, 3.0),
+                                                       C1=capped_linear(T0, 100000.0, T1, 20000.0),
+                                                       D1=constant(1000.0),
+                                                       C2=capped_linear(T0, 10000.0, T1, 2000.0),
+                                                       D2=constant(100.0),
+                                                       C3=capped_linear(T0, 1000.0, T1, 200.0),
+                                                       D3=constant(10.0),
+                                                       Q=capped_linear(T0, 100.0, T1, 50.0),
+                                                       b=capped_linear(T0, 50.0, T1, 10.0)),
+            mat = ChabocheThermal(parameters=parameters)
+
+            s33s = [mat.variables.stress[2,2]]
+            for i=2:length(ts)
+                dtime = ts[i] - ts[i-1]
+                dstrain = fromvoigt(Symm2{Float64}, strains[i] - strains[i-1]; offdiagscale=2.0)
+                mat.ddrivers = ChabocheDriverState(time=dtime, strain=dstrain)
+                integrate_material!(mat)
+                update_material!(mat)
+                push!(s33s, mat.variables.stress[2,2])
+            end
+            @test isapprox(s33s, s33_; rtol=0.05)
+        end
     end
 end
