@@ -537,6 +537,9 @@ let
             thetas = [K(celsius) for celsius in temperature_]
             temperature_pairs = zip(thetas, thetas[2:end])
 
+            # TODO: Use a smaller timestep and gather results every N timesteps,
+            # TODO: we have just backward Euler for now so it's not very accurate.
+
             es = [copy(mat.drivers.strain)]
             ss = [copy(mat.variables.stress)]
             X1s = [copy(mat.variables.X1)]
