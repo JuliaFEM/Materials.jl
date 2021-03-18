@@ -537,9 +537,6 @@ let
             thetas = [K(celsius) for celsius in temperature_]
             temperature_pairs = zip(thetas, thetas[2:end])
 
-            # TODO: Use a smaller timestep and gather results every N timesteps,
-            # TODO: we have just backward Euler for now so it's not very accurate.
-
             es = [copy(mat.drivers.strain)]
             ss = [copy(mat.variables.stress)]
             X1s = [copy(mat.variables.X1)]
@@ -547,52 +544,71 @@ let
             X3s = [copy(mat.variables.X3)]
             Rs = [copy(mat.variables.R)]
             flags = [false]  # plastic response activation flag (computed from output)
-            for ((tcurr, tnext), (Tcurr, Tnext), (ecurr, enext), (scurr, snext)) in zip(time_pairs,
-                                                                                        temperature_pairs,
-                                                                                        strain_pairs,
-                                                                                        stress_pairs)
-                dtime = tnext - tcurr
-                dtemperature = Tnext - Tcurr
-
-                mat.drivers.temperature = Tcurr  # value at start of timestep
-                mat.ddrivers.time = dtime
-                mat.ddrivers.temperature = dtemperature
-
+            for (step, ((tcurr_, tnext_), (Tcurr_, Tnext_), (ecurr_, enext_), (scurr_, snext_))) in enumerate(zip(time_pairs,
+                                                                                                temperature_pairs,
+                                                                                                strain_pairs,
+                                                                                                                 stress_pairs))
+                print("$(step) out of $(length(time_pairs)), t = $(tcurr_)...\n")
                 cumeq_old = mat.variables.cumeq  # for plastic response activation detection
 
-                # # For reference only:
-                # # This is how we would use the whole strain tensor from the Abaqus data as driver.
-                # #
-                # dstrain = enext - ecurr
-                # mat.ddrivers.strain = fromvoigt(Symm2{Float64}, dstrain, offdiagscale=2.0)
-                # integrate_material!(mat)
+                dtime_ = tnext_ - tcurr_
+                dtemperature_ = Tnext_ - Tcurr_
+                dstrain_ = enext_ - ecurr_
+                dstress_ = snext_ - scurr_
 
-                # This one is the actual test setup.
-                # Strain-driven uniaxial pull test in 22 direction, using only ε22 data as driver.
-                #
-                # note: our component ordering (Julia's standard Voigt)
-                dstrain22 = (enext - ecurr)[2]
-                dstrain = [missing, dstrain22, missing, missing, missing, missing]
-                dstrain_initialguess = [-dstrain22 * mat.parameters.nu(Tcurr),
-                                        dstrain22,
-                                        -dstrain22 * mat.parameters.nu(Tcurr),
-                                        0.0, 0.0, 0.0]
-                general_increment!(mat, dstrain, dt, dstrain_initialguess)
+                # Use a smaller timestep internally and gather results every N timesteps.
+                # We have just backward Euler for now, so the integrator is not very accurate.
+                N = 4
+                for substep in 1:N
+                    tcurr = tcurr_ + ((substep - 1) / N) * dtime_
+                    tnext = tcurr_ + (substep / N) * dtime_
+                    Tcurr = Tcurr_ + ((substep - 1) / N) * dtemperature_
+                    Tnext = Tcurr_ + (substep / N) * dtemperature_
+                    ecurr = ecurr_ + ((substep - 1) / N) * dstrain_
+                    enext = ecurr_ + (substep / N) * dstrain_
+                    scurr = scurr_ + ((substep - 1) / N) * dstress_
+                    snext = scurr_ + (substep / N) * dstress_
+                    dtime = tnext - tcurr
+                    dtemperature = Tnext - Tcurr
 
-                # # For reference only:
-                # # This is how we would do this for a stress-driven test, using the σ22 data as driver.
-                # #
-                # # note: our component ordering (Julia's standard Voigt)
-                # dstress22 = (snext - scurr)[2]
-                # dstress = [missing, dstress22, missing, missing, missing, missing]
-                # dstrain22_initialguess = dstress22 / mat.parameters.E(Tcurr)
-                # dstrain_initialguess = [-dstrain22_initialguess * mat.parameters.nu(Tcurr),
-                #                         dstrain22_initialguess,
-                #                         -dstrain22_initialguess * mat.parameters.nu(Tcurr),
-                #                         0.0, 0.0, 0.0]
-                # stress_driven_general_increment!(mat, dstress, dt, dstrain_initialguess)
+                    mat.drivers.temperature = Tcurr  # value at start of timestep
+                    mat.ddrivers.time = dtime
+                    mat.ddrivers.temperature = dtemperature
 
-                update_material!(mat)
+                    # # For reference only:
+                    # # This is how we would use the whole strain tensor from the Abaqus data as driver.
+                    # #
+                    # dstrain = enext - ecurr
+                    # mat.ddrivers.strain = fromvoigt(Symm2{Float64}, dstrain, offdiagscale=2.0)
+                    # integrate_material!(mat)
+
+                    # This one is the actual test setup.
+                    # Strain-driven uniaxial pull test in 22 direction, using only ε22 data as driver.
+                    #
+                    # note: our component ordering (Julia's standard Voigt)
+                    dstrain22 = (enext - ecurr)[2]
+                    dstrain = [missing, dstrain22, missing, missing, missing, missing]
+                    dstrain_initialguess = [-dstrain22 * mat.parameters.nu(Tcurr),
+                                            dstrain22,
+                                            -dstrain22 * mat.parameters.nu(Tcurr),
+                                            0.0, 0.0, 0.0]
+                    general_increment!(mat, dstrain, dt, dstrain_initialguess)
+
+                    # # For reference only:
+                    # # This is how we would do this for a stress-driven test, using the σ22 data as driver.
+                    # #
+                    # # note: our component ordering (Julia's standard Voigt)
+                    # dstress22 = (snext - scurr)[2]
+                    # dstress = [missing, dstress22, missing, missing, missing, missing]
+                    # dstrain22_initialguess = dstress22 / mat.parameters.E(Tcurr)
+                    # dstrain_initialguess = [-dstrain22_initialguess * mat.parameters.nu(Tcurr),
+                    #                         dstrain22_initialguess,
+                    #                         -dstrain22_initialguess * mat.parameters.nu(Tcurr),
+                    #                         0.0, 0.0, 0.0]
+                    # stress_driven_general_increment!(mat, dstress, dt, dstrain_initialguess)
+
+                    update_material!(mat)
+                end
 
                 push!(es, copy(mat.drivers.strain))
                 push!(ss, copy(mat.variables.stress))
