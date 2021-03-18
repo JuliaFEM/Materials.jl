@@ -530,11 +530,11 @@ let
                                                        b=capped_linear(T0, 50.0, T1, 10.0)),
             mat = ChabocheThermal(parameters=parameters)
 
-            thetas = [K(celsius) for celsius in temperature_]
-
             time_pairs = zip(ts, ts[2:end])
             strain_pairs = zip(strains, strains[2:end])
             stress_pairs = zip(stresses, stresses[2:end])
+
+            thetas = [K(celsius) for celsius in temperature_]
             temperature_pairs = zip(thetas, thetas[2:end])
 
             es = [copy(mat.drivers.strain)]
