@@ -554,7 +554,7 @@ let
                 dtime = tnext - tcurr
                 dtemperature = Tnext - Tcurr
 
-                mat.drivers.temperature = tcurr  # value at start of timestep
+                mat.drivers.temperature = Tcurr  # value at start of timestep
                 mat.ddrivers.time = dtime
                 mat.ddrivers.temperature = dtemperature
 
