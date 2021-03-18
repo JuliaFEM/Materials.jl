@@ -587,25 +587,25 @@ let
                     #
                     # note: our component ordering (Julia's standard Voigt)
                     dstrain22 = (enext - ecurr)[2]
-                    dstrain = [missing, dstrain22, missing, missing, missing, missing]
+                    dstrain_knowns = [missing, dstrain22, missing, missing, missing, missing]
                     dstrain_initialguess = [-dstrain22 * mat.parameters.nu(Tcurr),
                                             dstrain22,
                                             -dstrain22 * mat.parameters.nu(Tcurr),
                                             0.0, 0.0, 0.0]
-                    general_increment!(mat, dstrain, dt, dstrain_initialguess)
+                    general_increment!(mat, dstrain_knowns, dt, dstrain_initialguess)
 
                     # # For reference only:
                     # # This is how we would do this for a stress-driven test, using the σ22 data as driver.
                     # #
                     # # note: our component ordering (Julia's standard Voigt)
                     # dstress22 = (snext - scurr)[2]
-                    # dstress = [missing, dstress22, missing, missing, missing, missing]
+                    # dstress_knowns = [missing, dstress22, missing, missing, missing, missing]
                     # dstrain22_initialguess = dstress22 / mat.parameters.E(Tcurr)
                     # dstrain_initialguess = [-dstrain22_initialguess * mat.parameters.nu(Tcurr),
                     #                         dstrain22_initialguess,
                     #                         -dstrain22_initialguess * mat.parameters.nu(Tcurr),
                     #                         0.0, 0.0, 0.0]
-                    # stress_driven_general_increment!(mat, dstress, dt, dstrain_initialguess)
+                    # stress_driven_general_increment!(mat, dstress_knowns, dt, dstrain_initialguess)
 
                     update_material!(mat)
                 end
