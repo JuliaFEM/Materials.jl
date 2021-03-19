@@ -546,6 +546,8 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
         dX2dtemperature = fromvoigt(Symm2, Jtemperature[14:19, 1])
         dX3dtemperature = fromvoigt(Symm2, Jtemperature[20:25, 1])
     else  # elastic region
+        # TODO: update R (thermal effects), see if Xs also need updating
+
         jacobian = gradient(((dstrain) -> elastic_dstress(dstrain, dtemperature)),
                             dstrain)
         dstressdtemperature = gradient(((dtemperature) -> elastic_dstress(dstrain, dtemperature)),
@@ -931,10 +933,11 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         dQdtheta = gradient(Qf, temperature_new)
         dbdtheta = gradient(bf, temperature_new)
         cumeq_new = v.cumeq + dp
-        F[7] = R_new - R - (b*(Q - R_new) * dp
-                            + (dQdtheta * (1 - exp(-b * cumeq_new))
-                               + dbdtheta * (Q - R_new) * cumeq_new)
-                            * dtemperature)
+        # F[7] = R_new - R - (b*(Q - R_new) * dp
+        #                     + (dQdtheta * (1 - exp(-b * cumeq_new))
+        #                        + dbdtheta * (Q - R_new) * cumeq_new)
+        #                     * dtemperature)
+        F[7] = R_new - R - b*(Q - R_new) * dp
 
         # Reijo's equations (44) and (38):
         #

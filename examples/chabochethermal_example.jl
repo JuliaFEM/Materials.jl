@@ -558,7 +558,7 @@ let
 
                 # Use a smaller timestep internally and gather results every N timesteps.
                 # We have just backward Euler for now, so the integrator is not very accurate.
-                N = 4
+                N = 1
                 for substep in 1:N
                     tcurr = tcurr_ + ((substep - 1) / N) * dtime_
                     tnext = tcurr_ + (substep / N) * dtime_
