@@ -558,6 +558,11 @@ let
 
                 # Use a smaller timestep internally and gather results every N timesteps.
                 # We have just backward Euler for now, so the integrator is not very accurate.
+                # TODO: We offer this substepping possibility to obtain higher accuracy.
+                # TODO: We don't know what Abaqus internally does here when autostep is on.
+                # TODO: Likely, it uses some kind of error indicator and adapts the
+                # TODO: timestep size based on that.
+                # TODO: Should disable autostep and recompute the Abaqus reference results, so that we can be sure of what the results mean.
                 N = 1
                 for substep in 1:N
                     tcurr = tcurr_ + ((substep - 1) / N) * dtime_

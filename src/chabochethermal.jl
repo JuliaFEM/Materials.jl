@@ -933,6 +933,10 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         dQdtheta = gradient(Qf, temperature_new)
         dbdtheta = gradient(bf, temperature_new)
         cumeq_new = v.cumeq + dp
+        # TODO: p (cumeq) accumulates too much error to be usable here.
+        # TODO: As t increases, R will drift until the solution becomes nonsense.
+        # TODO: So for now, we approximate ∂Q/∂θ = ∂b/∂θ = 0 to eliminate terms
+        # TODO: that depend on p. (p' is fine; computed afresh every timestep.)
         # F[7] = R_new - R - (b*(Q - R_new) * dp
         #                     + (dQdtheta * (1 - exp(-b * cumeq_new))
         #                        + dbdtheta * (Q - R_new) * cumeq_new)
