@@ -940,8 +940,15 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         # F[7] = R_new - R - (b*(Q - R_new) * dp
         #                     + (dQdtheta * (1 - exp(-b * cumeq_new))
         #                        + dbdtheta * (Q - R_new) * cumeq_new)
-        #                     * dtemperature)
-        F[7] = R_new - R - b*(Q - R_new) * dp
+        #                     * dtemperature)  # numerically bad
+        # F[7] = R_new - R - b*(Q - R_new) * dp  # original equation, no dependence on temperature
+        # # consistent, including effects of temperature (and numerically much better than the above)
+        # F[7] = R_new - R - (dQdtheta * dtemperature * (1 - exp(-b * cumeq_new))
+        #                     + Q * (dbdtheta * dtemperature * cumeq_new + b * dp) * exp(-b * cumeq_new))
+        # # equivalent with the previous one, no difference in numerical behavior either
+        F[7] = R_new - R - (b*(Q - R_new) * dp
+                            + (dQdtheta * (1 - exp(-b * cumeq_new))
+                               + Q * dbdtheta * cumeq_new * exp(-b * cumeq_new)) * dtemperature)
 
         # Reijo's equations (44) and (38):
         #
