@@ -537,6 +537,7 @@ let
             thetas = [K(celsius) for celsius in temperature_]
             temperature_pairs = zip(thetas, thetas[2:end])
 
+            ts_output = [copy(mat.drivers.time)]
             es = [copy(mat.drivers.strain)]
             ss = [copy(mat.variables.stress)]
             X1s = [copy(mat.variables.X1)]
@@ -555,6 +556,11 @@ let
                 dtemperature_ = Tnext_ - Tcurr_
                 dstrain_ = enext_ - ecurr_
                 dstress_ = snext_ - scurr_
+
+                if dtime_ < 1e-8
+                    print("    zero Δt in input data, skipping\n")
+                    continue
+                end
 
                 # Use a smaller timestep internally and gather results every N timesteps.
                 # We have just backward Euler for now, so the integrator is not very accurate.
@@ -615,6 +621,7 @@ let
                     update_material!(mat)
                 end
 
+                push!(ts_output, tnext_)
                 push!(es, copy(mat.drivers.strain))
                 push!(ss, copy(mat.variables.stress))
                 push!(X1s, copy(mat.variables.X1))
@@ -671,53 +678,53 @@ let
             p1 = plot()
             plot!(ts, e22_, label="\$\\varepsilon_{22}\$ (Abaqus)")
             plot!(ts, e11_, label="\$\\varepsilon_{11}\$ (Abaqus)")
-            plot!(ts, e22s, label="\$\\varepsilon_{22}\$ (Materials.jl)")
-            plot!(ts, e11s, label="\$\\varepsilon_{11}\$ (Materials.jl)")
+            plot!(ts_output, e22s, label="\$\\varepsilon_{22}\$ (Materials.jl)")
+            plot!(ts_output, e11s, label="\$\\varepsilon_{11}\$ (Materials.jl)")
             for (s, e) in runs
-                plot!(ts[s:e], e22s[s:e], linecolor=:black, label=nothing)
+                plot!(ts_output[s:e], e22s[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p2 = plot()
             plot!(ts, s22_, label="\$\\sigma_{22}\$ [MPa] (Abaqus)")
             plot!(ts, s11_, label="\$\\sigma_{11}\$ [MPa] (Abaqus)")
-            plot!(ts, s22s, label="\$\\sigma_{22}\$ [MPa] (Materials.jl)")
-            plot!(ts, s11s, label="\$\\sigma_{11}\$ [MPa] (Materials.jl)")
+            plot!(ts_output, s22s, label="\$\\sigma_{22}\$ [MPa] (Materials.jl)")
+            plot!(ts_output, s11s, label="\$\\sigma_{11}\$ [MPa] (Materials.jl)")
             # scatter!(ts[flags], s22s[flags], markersize=3, markercolor=:black, markershape=:rect, label="in plastic region")
             for (s, e) in runs
-                plot!(ts[s:e], s22s[s:e], linecolor=:black, label=nothing)
+                plot!(ts_output[s:e], s22s[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p3 = plot()
             plot!(ts, temperature_, label="\$\\theta\$ [°C]")
-            plot!(ts, Rs, label="\$R\$ [MPa]")  # stress-like, unrelated, but the range of values fits here best.
+            plot!(ts_output, Rs, label="\$R\$ [MPa]")  # stress-like, unrelated, but the range of values fits here best.
             for (s, e) in runs
                 plot!(ts[s:e], temperature_[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p4 = plot()
-            plot!(ts, X1_22s, label="\$(X_1)_{22}\$ [MPa]")
-            plot!(ts, X1_11s, label="\$(X_1)_{11}\$ [MPa]")
+            plot!(ts_output, X1_22s, label="\$(X_1)_{22}\$ [MPa]")
+            plot!(ts_output, X1_11s, label="\$(X_1)_{11}\$ [MPa]")
             for (s, e) in runs
-                plot!(ts[s:e], X1_22s[s:e], linecolor=:black, label=nothing)
+                plot!(ts_output[s:e], X1_22s[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p5 = plot()
-            plot!(ts, X2_22s, label="\$(X_2)_{22}\$ [MPa]")
-            plot!(ts, X2_11s, label="\$(X_2)_{11}\$ [MPa]")
+            plot!(ts_output, X2_22s, label="\$(X_2)_{22}\$ [MPa]")
+            plot!(ts_output, X2_11s, label="\$(X_2)_{11}\$ [MPa]")
             for (s, e) in runs
-                plot!(ts[s:e], X2_22s[s:e], linecolor=:black, label=nothing)
+                plot!(ts_output[s:e], X2_22s[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p6 = plot()
-            plot!(ts, X3_22s, label="\$(X_3)_{22}\$ [MPa]")
-            plot!(ts, X3_11s, label="\$(X_3)_{11}\$ [MPa]")
+            plot!(ts_output, X3_22s, label="\$(X_3)_{22}\$ [MPa]")
+            plot!(ts_output, X3_11s, label="\$(X_3)_{11}\$ [MPa]")
             for (s, e) in runs
-                plot!(ts[s:e], X3_22s[s:e], linecolor=:black, label=nothing)
+                plot!(ts_output[s:e], X3_22s[s:e], linecolor=:black, label=nothing)
             end
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
