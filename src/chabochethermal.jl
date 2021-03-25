@@ -501,7 +501,7 @@ function integrate_material!(material::GenericChabocheThermal{T}) where T <: Rea
     stress += elastic_dstress(dstrain, dtemperature)
 
     # using elastic trial problem state
-    if ff(stress, R, X1, X2, X3, temperature) > 0.0  # plastic region
+    if true  # ff(stress, R, X1, X2, X3, temperature) > 0.0  # plastic region
         rx!, rdstrain, rtemperature = create_nonlinear_system_of_equations(material)
         x0 = state_to_vector(stress, R, X1, X2, X3)
         res = nlsolve(rx!, x0; method=material.options.nlsolve_method, autodiff=:forward)  # user manual: https://github.com/JuliaNLSolvers/NLsolve.jl
