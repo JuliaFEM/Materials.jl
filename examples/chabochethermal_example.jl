@@ -489,7 +489,7 @@ let
 
         # Abaqus as reference point. Data provided by Joona.
         # The data describes a strain-driven uniaxial cyclic push-pull test in the 22 direction.
-        let path = joinpath("test_chabochethermal", "chabochethermal_cyclic_test.rpt"),
+        let path = joinpath("test_chabochethermal", "chabochethermal_cyclic_test_no_autostep.rpt"),
             data = readdlm(path, Float64; skipstart=4),
             ts = data[:, 1],
             e11_ = data[:, 2],  # note Abaqus component ordering
