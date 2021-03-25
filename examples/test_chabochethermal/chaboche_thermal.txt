@@ -1,0 +1,55 @@
+***divergence_details
+***material
+  *integration theta_method_a 1.0 1.e-10 50
+  
+***parameter
+ **ambient_temperature 23.0
+  
+***behavior gen_evp auto_step
+ **allow_out_of_bounds
+ **thermal_strain isotropic
+   alpha temperature
+   1.0e-05 0.0
+   1.5e-05 400.0
+**elasticity isotropic 
+young temperature
+200000.0 23.0
+120000.0 400.0
+poisson temperature
+0.3 23.0
+0.45 400.0
+**potential gen_evp 
+*criterion mises 
+*flow norton 
+n temperature
+10.0 23.0
+3.0 400.0
+K temperature
+50.0 23.0
+250.0 400.0
+*kinematic nonlinear 
+C temperature
+100000.0 23.0
+20000.0 400.0
+D 1000.0
+*kinematic nonlinear 
+C temperature
+10000.0 23.0
+2000.0 400.0
+D 100.0
+*kinematic nonlinear 
+C temperature
+1000.0 23.0
+200.0 400.0
+D 10.0
+*isotropic nonlinear_sum
+R0 temperature
+100.0 23.0
+50.0 400.0
+Q1 temperature
+100.0 23.0
+50.0 400.0
+b1 temperature
+50.0 23.0
+10.0 400.0
+***return 
