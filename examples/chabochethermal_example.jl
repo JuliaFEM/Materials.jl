@@ -705,30 +705,38 @@ let
             plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
 
             p4 = plot()
-            plot!(ts_output, X1_22s, label="\$(X_1)_{22}\$ [MPa]")
-            plot!(ts_output, X1_11s, label="\$(X_1)_{11}\$ [MPa]")
-            for (s, e) in runs
-                plot!(ts_output[s:e], X1_22s[s:e], linecolor=:black, label=nothing)
-            end
-            plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
+            plot!(e22_, s22_, label="22 (Abaqus)")
+            plot!(e22s, s22s, label="22 (Materials.jl)")
+            # plot!(e11_, s11_, label="11 (Abaqus)")
+            # plot!(e11s, s11s, label="11 (Materials.jl)")
 
-            p5 = plot()
-            plot!(ts_output, X2_22s, label="\$(X_2)_{22}\$ [MPa]")
-            plot!(ts_output, X2_11s, label="\$(X_2)_{11}\$ [MPa]")
-            for (s, e) in runs
-                plot!(ts_output[s:e], X2_22s[s:e], linecolor=:black, label=nothing)
-            end
-            plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
+            plot(p1, p2, p3, p4, layout=(2, 2))
 
-            p6 = plot()
-            plot!(ts_output, X3_22s, label="\$(X_3)_{22}\$ [MPa]")
-            plot!(ts_output, X3_11s, label="\$(X_3)_{11}\$ [MPa]")
-            for (s, e) in runs
-                plot!(ts_output[s:e], X3_22s[s:e], linecolor=:black, label=nothing)
-            end
-            plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
-
-            plot(p1, p2, p3, p4, p5, p6, layout=(2, 3))
+            # p4 = plot()
+            # plot!(ts_output, X1_22s, label="\$(X_1)_{22}\$ [MPa]")
+            # plot!(ts_output, X1_11s, label="\$(X_1)_{11}\$ [MPa]")
+            # for (s, e) in runs
+            #     plot!(ts_output[s:e], X1_22s[s:e], linecolor=:black, label=nothing)
+            # end
+            # plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
+            #
+            # p5 = plot()
+            # plot!(ts_output, X2_22s, label="\$(X_2)_{22}\$ [MPa]")
+            # plot!(ts_output, X2_11s, label="\$(X_2)_{11}\$ [MPa]")
+            # for (s, e) in runs
+            #     plot!(ts_output[s:e], X2_22s[s:e], linecolor=:black, label=nothing)
+            # end
+            # plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
+            #
+            # p6 = plot()
+            # plot!(ts_output, X3_22s, label="\$(X_3)_{22}\$ [MPa]")
+            # plot!(ts_output, X3_11s, label="\$(X_3)_{11}\$ [MPa]")
+            # for (s, e) in runs
+            #     plot!(ts_output[s:e], X3_22s[s:e], linecolor=:black, label=nothing)
+            # end
+            # plot!([NaN], [NaN], linecolor=:black, label="plastic response active")
+            #
+            # plot(p1, p2, p3, p4, p5, p6, layout=(2, 3))
         end
     end
 end
