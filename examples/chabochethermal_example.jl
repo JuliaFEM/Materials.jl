@@ -537,6 +537,8 @@ let
             thetas = [K(celsius) for celsius in temperature_]
             temperature_pairs = zip(thetas, thetas[2:end])
 
+            # print(count(dt -> dt < 0.001, diff(ts)))
+
             ts_output = [copy(mat.drivers.time)]
             es = [copy(mat.drivers.strain)]
             ss = [copy(mat.variables.stress)]
