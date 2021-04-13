@@ -855,6 +855,29 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
 
         local dtemperature = temperature_new - temperature
 
+        # Hooke's law in elastic regime
+        #
+        #   σ = D : ε_el
+        #
+        # leads to
+        #
+        #   σ' = D : (ε_el)' + ∂D/∂θ : ε_el θ'
+        #
+        # We have postulated that the evolution equation for the stress
+        # remains the same also in the viscoplastic regime, but now
+        # plastic contributions to the total strain ε affect the
+        # elastic strain ε_el:
+        #
+        #   ε = ε_el + ε_pl + ε_th
+        #
+        # so that
+        #
+        #   ε_el = ε - ε_pl - ε_th
+        #
+        # and similarly for the increments. Note that the old elastic
+        # strain can be obtained by inverting Hooke's law at the old
+        # stress value.
+        #
         dp = dotp * dtime
         plastic_dstrain = dp * n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
