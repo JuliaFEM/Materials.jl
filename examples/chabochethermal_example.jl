@@ -489,6 +489,8 @@ let
 
         # Abaqus as reference point. Data provided by Joona.
         # The data describes a strain-driven uniaxial cyclic push-pull test in the 22 direction.
+        # let path = joinpath("test_chabochethermal", "cyclic_notherm",
+        #                     "chabochethermal_cyclic_test_nktherm.rpt"),
         let path = joinpath("test_chabochethermal", "chabochethermal_cyclic_test_no_autostep.rpt"),
             data = readdlm(path, Float64; skipstart=4),
             ts = data[:, 1],
@@ -511,6 +513,7 @@ let
             stresses = [[s11_[i], s22_[i], s33_[i], s23_[i], s13_[i], s12_[i]] for i in 1:length(ts)],
             T0 = K(23.0),
             T1 = K(400.0),
+            # original test
             parameters = ChabocheThermalParameterState(theta0=T0,
                                                        E=capped_linear(T0, 200.0e3, T1, 120.0e3),
                                                        nu=capped_linear(T0, 0.3, T1, 0.45),
@@ -528,6 +531,79 @@ let
                                                        D3=constant(10.0),
                                                        Q=capped_linear(T0, 100.0, T1, 50.0),
                                                        b=capped_linear(T0, 50.0, T1, 10.0)),
+
+            # # DEBUG: notherm test data
+            # parameters = ChabocheThermalParameterState(theta0=T0,
+            #                                            E=constant(200.0e3),
+            #                                            nu=constant(0.3),
+            #                                            alpha=constant(1.0e-5),
+            #                                            R0=constant(100.0),
+            #                                            tvp=1.0,
+            #                                            Kn=constant(50.0),
+            #                                            nn=constant(10.0),
+            #                                            C1=constant(100000.0),
+            #                                            D1=constant(1000.0),
+            #                                            C2=constant(10000.0),
+            #                                            D2=constant(100.0),
+            #                                            C3=constant(1000.0),
+            #                                            D3=constant(10.0),
+            #                                            Q=constant(100.0),
+            #                                            b=constant(50.0)),
+
+            # # DEBUG: ctherm test data
+            # parameters = ChabocheThermalParameterState(theta0=T0,
+            #                                            E=constant(200.0e3),
+            #                                            nu=constant(0.3),
+            #                                            alpha=constant(1.0e-5),
+            #                                            R0=constant(100.0),
+            #                                            tvp=1.0,
+            #                                            Kn=constant(50.0),
+            #                                            nn=constant(10.0),
+            #                                            C1=capped_linear(T0, 100000.0, T1, 20000.0),
+            #                                            D1=constant(1000.0),
+            #                                            C2=capped_linear(T0, 10000.0, T1, 2000.0),
+            #                                            D2=constant(100.0),
+            #                                            C3=capped_linear(T0, 1000.0, T1, 200.0),
+            #                                            D3=constant(10.0),
+            #                                            Q=constant(100.0),
+            #                                            b=constant(50.0)),
+
+            # # DEBUG: nktherm test data
+            # parameters = ChabocheThermalParameterState(theta0=T0,
+            #                                            E=constant(200.0e3),
+            #                                            nu=constant(0.3),
+            #                                            alpha=constant(1.0e-5),
+            #                                            R0=constant(100.0),
+            #                                            tvp=1.0,
+            #                                            Kn=capped_linear(T0, 50.0, T1, 250.0),
+            #                                            nn=capped_linear(T0, 10.0, T1, 3.0),
+            #                                            C1=constant(100000.0),
+            #                                            D1=constant(1000.0),
+            #                                            C2=constant(10000.0),
+            #                                            D2=constant(100.0),
+            #                                            C3=constant(1000.0),
+            #                                            D3=constant(10.0),
+            #                                            Q=constant(100.0),
+            #                                            b=constant(50.0)),
+
+            # # DEBUG: rqbtherm test data
+            # parameters = ChabocheThermalParameterState(theta0=T0,
+            #                                            E=constant(200.0e3),
+            #                                            nu=constant(0.3),
+            #                                            alpha=constant(1.0e-5),
+            #                                            R0=capped_linear(T0, 100.0, T1, 50.0),
+            #                                            tvp=1.0,
+            #                                            Kn=constant(50.0),
+            #                                            nn=constant(10.0),
+            #                                            C1=constant(100000.0),
+            #                                            D1=constant(1000.0),
+            #                                            C2=constant(10000.0),
+            #                                            D2=constant(100.0),
+            #                                            C3=constant(1000.0),
+            #                                            D3=constant(10.0),
+            #                                            Q=capped_linear(T0, 100.0, T1, 50.0),
+            #                                            b=capped_linear(T0, 50.0, T1, 10.0)),
+
             mat = ChabocheThermal(parameters=parameters)
 
             time_pairs = zip(ts, ts[2:end])
