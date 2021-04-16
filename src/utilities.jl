@@ -69,6 +69,15 @@ Rank-4 unit tensor, deviatoric. ID ≡ IS - IV.
 """
 ID(T::Type=Float64) = IS(T) - IV(T)
 
+# TODO: implement other symmetry groups, not just isotropic.
+#
+# Only 8 elastic symmetry groups exist, so we could implement all of them.
+#
+# The elasticity and compliance tensors are the inverses of each other, and the
+# `inv` function can invert rank-4 tensors numerically. So we can use that,
+# if one of these tensors is not easily available in analytical form for some
+# symmetry group. Could also investigate if SymPy can invert them symbolically
+# (possible at least in Voigt notation).
 """
     isotropic_elasticity_tensor(lambda::T, mu::T) where T <: Real
 

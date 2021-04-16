@@ -47,7 +47,7 @@ automatically invoke `reset_material!`.
 """
 function update_material!(material::AbstractMaterial)
     material.drivers += material.ddrivers
-    material.parameters += material.dparameters
+#    material.parameters += material.dparameters  # TODO: fix this
     material.variables = material.variables_new
     reset_material!(material)
     return nothing
@@ -83,6 +83,10 @@ include("chaboche.jl")
 using .ChabocheModule
 export Chaboche, ChabocheDriverState, ChabocheParameterState, ChabocheVariableState
 
+include("chabochethermal.jl")
+using .ChabocheThermalModule
+export ChabocheThermal, ChabocheThermalDriverState, ChabocheThermalParameterState, ChabocheThermalVariableState
+
 include("memory.jl")
 using .MemoryModule
 export Memory, MemoryDriverState, MemoryParameterState, MemoryVariableState
@@ -94,6 +98,6 @@ export DSA, DSADriverState, DSAParameterState, DSAVariableState
 include("increments.jl")
 using .Increments
 export uniaxial_increment!, biaxial_increment!, stress_driven_uniaxial_increment!,
-       general_increment!, stress_driven_general_increment!, find_dstrain!
+       general_increment!, stress_driven_general_increment!, general_mixed_increment!, find_dstrain!
 
 end

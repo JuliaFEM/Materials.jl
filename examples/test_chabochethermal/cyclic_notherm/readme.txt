@@ -1,0 +1,4 @@
+- notherm: Millään muuttujalla ei pitäisi olla lämpötilariippuvuutta
+- nktherm: Viskoplastisuusparametreilla on lämpötilariippuvuus
+- ctherm: Kinemaattisella lujittumisella
+- rqbtherm: Isotrooppisella lujittumisella
