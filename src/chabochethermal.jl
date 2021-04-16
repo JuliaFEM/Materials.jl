@@ -882,10 +882,17 @@ function create_nonlinear_system_of_equations(material::GenericChabocheThermal{T
         plastic_dstrain = dp * n
         elastic_dstrain = dstrain - plastic_dstrain - thermal_dstrain
         elastic_strain = elastic_strain_old + elastic_dstrain
+
+        # # σ' = D : (ε_el)' + ∂D/∂θ : ε_el θ'
+        # tovoigt!(view(F, 1:6),
+        #          stress_new - stress
+        #          - dcontract(D, elastic_dstrain)
+        #          - dcontract(dDdtheta, elastic_strain) * dtemperature)
+
+        # σ = D : ε_el
         tovoigt!(view(F, 1:6),
-                 stress_new - stress
-                 - dcontract(D, elastic_dstrain)
-                 - dcontract(dDdtheta, elastic_strain) * dtemperature)
+                 stress_new
+                 - dcontract(D, elastic_strain))
 
         # Reijo's equations (37) and (43), for exponentially saturating
         # isotropic hardening, are:
